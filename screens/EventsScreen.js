@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -76,7 +75,6 @@ export default function EventsScreen({ onSelectEvent, session, isGuest }) {
 
       if (error) throw error;
 
-      // Si hay datos en Supabase los usamos; si la tabla está vacía, mostramos los MOCK de prueba
       if (data && data.length > 0) {
         setEvents(data);
       } else {
@@ -105,7 +103,7 @@ export default function EventsScreen({ onSelectEvent, session, isGuest }) {
       setEvents((prev) => [newEvent, ...prev]);
     }
     setShowCreateEvent(false);
-    fetchEvents(); // Sincroniza con Supabase
+    fetchEvents();
   };
 
   const handleMapSelectEvent = (event) => {
@@ -122,7 +120,11 @@ export default function EventsScreen({ onSelectEvent, session, isGuest }) {
   }
 
   return (
-    <View style={{ flex: 1, width: '100%' }}>
+    <ScrollView 
+      style={{ flex: 1, width: '100%' }} 
+      contentContainerStyle={{ paddingBottom: 32 }}
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={{ color: '#ffffff', fontSize: 28, fontWeight: '800', marginBottom: 4 }}>
         Próximos Eventos 📅
       </Text>
@@ -151,7 +153,7 @@ export default function EventsScreen({ onSelectEvent, session, isGuest }) {
       )}
 
       {/* FILTROS POR CATEGORÍA */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, maxHeight: 40 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, maxHeight: 40 }}>
         {categories.map((cat) => (
           <TouchableOpacity
             key={cat}
@@ -197,20 +199,27 @@ export default function EventsScreen({ onSelectEvent, session, isGuest }) {
                 overflow: 'hidden',
               }}
             >
-              <View style={{ height: 140, width: '100%', position: 'relative' }}>
+              {/* IMAGEN Y ETIQUETAS FLOTANTES */}
+              <View style={{ height: 150, width: '100%', position: 'relative' }}>
                 <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                
+                {/* Etiqueta Flotante Izquierda: Categoría */}
                 {event.category && (
-                  <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(2, 6, 23, 0.85)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                  <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(2, 6, 23, 0.85)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(250, 204, 21, 0.4)' }}>
                     <Text style={{ color: '#facc15', fontSize: 11, fontWeight: '700' }}>{event.category}</Text>
                   </View>
                 )}
+
+                {/* Etiqueta Flotante Derecha: Precio */}
                 <View style={{ position: 'absolute', top: 12, right: 12, backgroundColor: '#facc15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
                   <Text style={{ color: '#000000', fontSize: 11, fontWeight: '800' }}>{event.price || 'Gratis'}</Text>
                 </View>
               </View>
 
+              {/* DETALLES DEL EVENTO */}
               <View style={{ padding: 16 }}>
                 <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '700', marginBottom: 8 }}>{event.title}</Text>
+                
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                   <Ionicons name="calendar-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
                   <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '600', marginRight: 12 }}>{eventDate}</Text>
@@ -221,15 +230,18 @@ export default function EventsScreen({ onSelectEvent, session, isGuest }) {
                     </>
                   )}
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="location-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-                  <Text style={{ color: '#64748b', fontSize: 13 }}>{event.location || event.address || 'Ubicación a confirmar'}</Text>
+                  <Text style={{ color: '#64748b', fontSize: 13 }} numberOfLines={1}>
+                    {event.location || event.address || 'Ubicación a confirmar'}
+                  </Text>
                 </View>
               </View>
             </TouchableOpacity>
           );
         })
       )}
-    </View>
+    </ScrollView>
   );
 }
