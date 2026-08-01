@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Hip-Happ",
+    "slug": "hip-happ",
+    "scheme": "hiphapp",
+    "version": "1.0.0",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hiphapp.app",
+      "config": {
+        "googleMapsApiKey": "TU_CLAVE_API_AQUI"
+      }
+    },
+    "android": {
+      "package": "com.hiphapp.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "TU_CLAVE_API_AQUI"
+        }
+      }
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
+  }
+}
