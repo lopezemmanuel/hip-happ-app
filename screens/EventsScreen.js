@@ -133,6 +133,7 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState(null);
+  const [focusEventId, setFocusEventId] = useState(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
 
@@ -363,6 +364,8 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
           <EventsMap
             key={loading ? 'map-loading' : 'map-ready'}
             events={mapMarkers}
+            selectedEventId={selectedEventId}
+            focusEventId={focusEventId}
             onSelectEvent={handleMapSelectEvent}
           />
         </View>
@@ -382,7 +385,10 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
             return (
               <TouchableOpacity
                 key={event.id}
-                onPress={() => setSelectedEventId(event.id)}
+                onPress={() => {
+                  setSelectedEventId(event.id);
+                  setFocusEventId(event.id);
+                }}
                 activeOpacity={0.9}
                 style={{
                   backgroundColor: isSelected ? '#111827' : '#0f172a',
