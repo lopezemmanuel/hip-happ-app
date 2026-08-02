@@ -11,9 +11,30 @@ CREATE TABLE IF NOT EXISTS public.users (
   avatar_url TEXT,
   bio TEXT,
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'artist', 'admin')),
+  is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  disciplines TEXT[] DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Crea automáticamente la fila en public.users cuando alguien se registra en Supabase Auth
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (id, full_name)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email)
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Tabla de artistas
 CREATE TABLE IF NOT EXISTS public.artists (
@@ -34,10 +55,29 @@ CREATE TABLE IF NOT EXISTS public.events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   description TEXT,
+  description_long TEXT,
   location TEXT NOT NULL,
+  address TEXT,
   event_date TIMESTAMPTZ NOT NULL,
   image_url TEXT,
+  image_urls TEXT[] DEFAULT '{}',
+  main_image_index INTEGER DEFAULT 0,
+  price TEXT,
   organizer_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  freestyle BOOLEAN NOT NULL DEFAULT FALSE,
+  show BOOLEAN NOT NULL DEFAULT FALSE,
+  batallas BOOLEAN NOT NULL DEFAULT FALSE,
+  dance BOOLEAN NOT NULL DEFAULT FALSE,
+  djing BOOLEAN NOT NULL DEFAULT FALSE,
+  jam BOOLEAN NOT NULL DEFAULT FALSE,
+  cypher BOOLEAN NOT NULL DEFAULT FALSE,
+  breaking BOOLEAN NOT NULL DEFAULT FALSE,
+  festival BOOLEAN NOT NULL DEFAULT FALSE,
+  taller BOOLEAN NOT NULL DEFAULT FALSE,
+  expo BOOLEAN NOT NULL DEFAULT FALSE,
+  graffiti BOOLEAN NOT NULL DEFAULT FALSE,
+  street_art BOOLEAN NOT NULL DEFAULT FALSE,
+  encuentro BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -120,11 +160,17 @@ CREATE POLICY "Authenticated users can insert events"
   FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Authenticated users can update their own events"
+CREATE POLICY "Owners and admins can update events"
   ON public.events
   FOR UPDATE
-  USING (organizer_id = auth.uid())
-  WITH CHECK (organizer_id = auth.uid());
+  USING (
+    organizer_id = auth.uid()
+    OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+  )
+  WITH CHECK (
+    organizer_id = auth.uid()
+    OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+  );
 
 CREATE POLICY "Authenticated users can insert news"
   ON public.news
@@ -143,10 +189,13 @@ CREATE POLICY "Users can delete their own artists"
   FOR DELETE
   USING (user_id = auth.uid());
 
-CREATE POLICY "Users can delete their own events"
+CREATE POLICY "Owners and admins can delete events"
   ON public.events
   FOR DELETE
-  USING (organizer_id = auth.uid());
+  USING (
+    organizer_id = auth.uid()
+    OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+  );
 
 CREATE POLICY "Users can delete their own news"
   ON public.news

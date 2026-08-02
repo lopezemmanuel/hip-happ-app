@@ -33,7 +33,13 @@
       }
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Hip-Happ necesita acceso a tus fotos para subir imágenes de tus eventos."
+        }
+      ]
     ]
   }
 }

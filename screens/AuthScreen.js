@@ -11,10 +11,23 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
+import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
+
+function parseTokensFromUrl(url) {
+  if (!url) return {};
+  const splitIndex = url.indexOf('#') >= 0 ? url.indexOf('#') : url.indexOf('?');
+  if (splitIndex < 0) return {};
+  const paramsString = url.substring(splitIndex + 1);
+  const params = {};
+  paramsString.split('&').forEach((pair) => {
+    const [key, value] = pair.split('=');
+    if (key) params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+  });
+  return params;
+}
 
 export default function AuthScreen({ onCreateAccount, onLoginSuccess }) {
   const [email, setEmail] = useState('');
@@ -57,10 +70,26 @@ export default function AuthScreen({ onCreateAccount, onLoginSuccess }) {
     }
   };
 
+  const handleForgotPassword = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      Alert.alert('Ingresá tu correo', 'Escribí tu correo electrónico arriba y volvé a tocar "¿Olvidaste la contraseña?".');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+      if (error) throw error;
+      Alert.alert('Revisá tu correo', 'Te enviamos un link para restablecer tu contraseña.');
+    } catch (error) {
+      Alert.alert('Error', error.message || 'No se pudo enviar el correo de recuperación.');
+    }
+  };
+
   // Inicio de sesión con Google / Facebook
   const handleOAuthLogin = async (provider) => {
     try {
-      const redirectUrl = makeRedirectUri({ scheme: 'hiphapp' });
+      const redirectUrl = Linking.createURL('auth-callback');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo: redirectUrl, skipBrowserRedirect: false },
@@ -69,13 +98,32 @@ export default function AuthScreen({ onCreateAccount, onLoginSuccess }) {
       if (error) throw error;
 
       if (data?.url) {
+        console.log('Abriendo sesión OAuth, redirectUrl esperado:', redirectUrl);
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        if (result.type === 'success') {
+        console.log('Resultado de openAuthSessionAsync:', JSON.stringify(result));
+
+        if (result.type === 'success' && result.url) {
+          const params = parseTokensFromUrl(result.url);
+          if (params.access_token && params.refresh_token) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: params.access_token,
+              refresh_token: params.refresh_token,
+            });
+            if (sessionError) {
+              console.log('Error al establecer sesión OAuth:', sessionError.message);
+              Alert.alert('Error', 'No se pudo completar el inicio de sesión.');
+              return;
+            }
+          }
+
           const { data: sessionData } = await supabase.auth.getSession();
           if (onLoginSuccess && sessionData?.session) {
             onLoginSuccess(sessionData.session, false);
+          } else {
+            console.log('No se encontró sesión después del login OAuth.');
           }
-          console.log('Sesión iniciada:', sessionData);
+        } else {
+          console.log('El navegador de login se cerró sin completar (type):', result.type);
         }
       }
     } catch (error) {
@@ -182,7 +230,7 @@ export default function AuthScreen({ onCreateAccount, onLoginSuccess }) {
 
           {/* 7. Texto / Botón: ¿Olvidaste la contraseña? */}
           <TouchableOpacity
-            onPress={() => Alert.alert('Recuperación', 'Función para restablecer contraseña.')}
+            onPress={handleForgotPassword}
             style={{ alignItems: 'center', marginVertical: 4 }}
           >
             <Text style={{ color: '#94A3B8', fontSize: 13, textDecorationLine: 'underline' }}>

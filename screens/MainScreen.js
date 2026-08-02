@@ -3,7 +3,6 @@ import { View, Text, Alert, SafeAreaView, ScrollView, Image, TouchableOpacity } 
 import { Ionicons } from '@expo/vector-icons';
 import BottomTab from '../components/BottomTab';
 import UserDrawer from '../components/UserDrawer';
-import AddEventModal from '../components/AddEventModal';
 import EventsScreen from './EventsScreen';
 import CommunityScreen from './CommunityScreen';
 import { supabase } from '../lib/supabase';
@@ -38,7 +37,6 @@ const MOCK_NEWS = [
 export default function MainScreen({ session, isGuest, userProfile, onRequireAuth }) {
   const [activeTab, setActiveTab] = useState('Home');
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [eventModalVisible, setEventModalVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [isVerified, setIsVerified] = useState(false);
 
@@ -77,11 +75,6 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
 
     fetchUserPermissions();
   }, [session, userProfile, isGuest]);
-
-  // 2. SOLO MOSTRAR A ADMINS O VERIFICADOS
-  const canAddEvents = 
-    !isGuest && 
-    (userRole?.toLowerCase() === 'admin' || isVerified === true);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -164,10 +157,12 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
 
       case 'Eventos':
         return (
-          <EventsScreen 
+          <EventsScreen
             onSelectEvent={(event) => Alert.alert('Evento', `Elegiste: ${event.title}`)}
             session={session}
             isGuest={isGuest}
+            userRole={userRole}
+            isVerified={isVerified}
           />
         );
 
@@ -188,32 +183,26 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#020617' }}>
       
-      {/* HEADER SUPERIOR CON BOTÓN "AGREGAR EVENTO" Y AVATAR */}
+      {/* HEADER SUPERIOR CON LOGO Y AVATAR */}
       <View style={{ width: '100%', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        
-        {/* BOTÓN SUPERIOR "AGREGAR EVENTO" (SOLO EN PESTAÑA EVENTOS Y SI TIENE PERMISOS) */}
-        {activeTab === 'Eventos' && canAddEvents ? (
-          <TouchableOpacity
-            onPress={() => setEventModalVisible(true)}
-            activeOpacity={0.8}
+
+        {/* LOGO HIP-HAPP (genérico por el momento) */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View
             style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
               backgroundColor: '#facc15',
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              borderRadius: 20,
-              flexDirection: 'row',
+              justifyContent: 'center',
               alignItems: 'center',
-              gap: 6,
+              marginRight: 8,
             }}
           >
-            <Ionicons name="add-circle" size={18} color="#000000" />
-            <Text style={{ color: '#000000', fontWeight: '800', fontSize: 12 }}>
-              Agregar evento
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <View />
-        )}
+            <Ionicons name="mic" size={18} color="#000000" />
+          </View>
+          <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800' }}>Hip-Happ</Text>
+        </View>
 
         {/* AVATAR DE USUARIO */}
         <TouchableOpacity
@@ -254,15 +243,6 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
         onLogout={() => {
           setDrawerVisible(false);
           onRequireAuth();
-        }}
-      />
-
-      {/* MODAL DE AGREGAR EVENTO */}
-      <AddEventModal
-        visible={eventModalVisible}
-        onClose={() => setEventModalVisible(false)}
-        onSuccess={() => {
-          // Recargar eventos si es necesario
         }}
       />
 

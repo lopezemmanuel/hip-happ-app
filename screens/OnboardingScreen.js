@@ -17,7 +17,7 @@ const DISCIPLINES_LIST = [
   'Beatboxer', 'Productor', 'Beatmaker', 'Host', 'Videograph', 'Photograph'
 ];
 
-export default function OnboardingScreen({ onComplete }) {
+export default function OnboardingScreen({ onComplete, session }) {
   const [aka, setAka] = useState('');
   const [selectedDisciplines, setSelectedDisciplines] = useState([]);
   const [availabilityStatus, setAvailabilityStatus] = useState('idle');
@@ -106,7 +106,24 @@ export default function OnboardingScreen({ onComplete }) {
       return;
     }
 
-    onComplete({ aka: trimmedAka, disciplines: selectedDisciplines });
+    if (!session?.user?.id) {
+      Alert.alert('Error', 'No se encontró tu sesión. Volvé a iniciar sesión e intentá de nuevo.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ username: trimmedAka, disciplines: selectedDisciplines })
+      .eq('id', session.user.id)
+      .select('role, is_verified, username, full_name, disciplines')
+      .maybeSingle();
+
+    if (error) {
+      Alert.alert('Error al guardar', 'No se pudo guardar tu perfil. Intenta de nuevo.');
+      return;
+    }
+
+    onComplete({ ...data, aka: trimmedAka, disciplines: selectedDisciplines });
   };
 
   return (

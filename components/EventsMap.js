@@ -1,107 +1,64 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import { View, Text, Platform } from 'react-native';
 
-export default function EventsMap({ events = [], onSelectEvent }) {
-  // Coordenadas iniciales centradas en Zona Sur / CABA
-  const defaultRegion = {
-    latitude: -34.7592,
-    longitude: -58.4022,
-    latitudeDelta: 0.15,
-    longitudeDelta: 0.15,
-  };
-
-  // Procesamos los eventos para evitar que dos pines coincidan exactamente en el mismo punto
-  const processedEvents = events.map((event, index) => {
-    let lat = parseFloat(event.latitude);
-    let lng = parseFloat(event.longitude);
-
-    // Si no tienen lat/lng válidos, asignamos un punto inicial con un leve desplazamiento
-    if (isNaN(lat) || isNaN(lng)) {
-      lat = defaultRegion.latitude + index * 0.008;
-      lng = defaultRegion.longitude + index * 0.008;
-    } else {
-      // Si hay eventos duplicados en la misma coordenada, los separamos ligeramente
-      const duplicateIndex = events.findIndex(
-        (e, idx) => idx < index && parseFloat(e.latitude) === lat && parseFloat(e.longitude) === lng
-      );
-      if (duplicateIndex !== -1) {
-        lat += 0.002 * index;
-        lng += 0.002 * index;
-      }
-    }
-
-    return {
-      ...event,
-      markerLat: lat,
-      markerLng: lng,
-    };
-  });
-
-  return (
-    <View style={styles.container}>
-      <MapView
-        style={styles.map}
-        initialRegion={defaultRegion}
-        showsUserLocation={true}
-      >
-        {processedEvents.map((event) => (
-          <Marker
-            key={String(event.id || Math.random())}
-            coordinate={{
-              latitude: event.markerLat,
-              longitude: event.markerLng,
-            }}
-            pinColor="#facc15"
-            onPress={() => onSelectEvent && onSelectEvent(event)}
-          >
-            <Callout>
-              <View style={styles.calloutContainer}>
-                <Text style={styles.calloutTitle}>{event.title || 'Evento'}</Text>
-                <Text style={styles.calloutText}>
-                  📍 {event.address || event.location || 'Ubicación sin especificar'}
-                </Text>
-                {event.date && <Text style={styles.calloutDate}>📅 {event.date}</Text>}
-              </View>
-            </Callout>
-          </Marker>
-        ))}
-      </MapView>
-    </View>
-  );
+// 1. Cargamos react-native-maps SOLO si NO estamos en la Web
+let MapView, Marker, Callout;
+if (Platform.OS !== 'web') {
+  const Maps = require('react-native-maps');
+  MapView = Maps.default;
+  Marker = Maps.Marker;
+  Callout = Maps.Callout;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    height: 250,
-    width: '100%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  calloutContainer: {
-    padding: 6,
-    maxWidth: 200,
-  },
-  calloutTitle: {
-    fontWeight: 'bold',
-    fontSize: 13,
-    color: '#0f172a',
-    marginBottom: 2,
-  },
-  calloutText: {
-    fontSize: 11,
-    color: '#334155',
-  },
-  calloutDate: {
-    fontSize: 10,
-    color: '#64748b',
-    marginTop: 2,
-  },
-});
+export default function EventsMap({ events = [], onSelectEvent, onPress }) {
+
+  // 2. Si estamos en la Web, mostramos este bloque para evitar que se ponga la pantalla en blanco
+  if (Platform.OS === 'web') {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212', padding: 20 }}>
+        <Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 16 }}>
+          📍 [Vista previa Web]
+          {"\n\n"}
+          El mapa nativo está oculto en la web para evitar el error 500. ¡El resto de tu app y pantallas sí se verán aquí!
+        </Text>
+      </View>
+    );
+  }
+
+  // 3. Si estás en celular (Android / iOS), renderiza tu mapa normalmente
+  const markers = events.filter(
+    (event) => typeof event.latitude === 'number' && typeof event.longitude === 'number'
+  );
+  const firstMarker = markers[0];
+
+  return (
+    <MapView
+      style={{ flex: 1 }}
+      initialRegion={{
+        latitude: firstMarker?.latitude ?? -34.6037,
+        longitude: firstMarker?.longitude ?? -58.3816,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }}
+      onPress={onPress}
+    >
+      {markers.map((event) => (
+        <Marker
+          key={event.id}
+          coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+          pinColor="#facc15"
+          onPress={() => onSelectEvent?.(event)}
+        >
+          <Callout>
+            <View style={{ padding: 6, maxWidth: 220 }}>
+              <Text style={{ fontWeight: '700', color: '#020617' }}>{event.title}</Text>
+              {!!event.subtitle && (
+                <Text style={{ color: '#334155', fontSize: 12, marginTop: 2 }}>{event.subtitle}</Text>
+              )}
+            </View>
+          </Callout>
+        </Marker>
+      ))}
+    </MapView>
+  );
+}

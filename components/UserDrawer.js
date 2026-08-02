@@ -11,12 +11,36 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
 
 export default function UserDrawer({ visible, onClose, session, isGuest, onLogout }) {
   const [notifications, setNotifications] = React.useState(true);
   const [selectedCity, setSelectedCity] = React.useState('Buenos Aires, AR');
+  const [profile, setProfile] = React.useState(null);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      if (isGuest || !session?.user?.id) {
+        setProfile(null);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('users')
+        .select('username, full_name, is_verified, disciplines, avatar_url')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (!error && data) {
+        setProfile(data);
+      }
+    }
+
+    if (visible) {
+      fetchProfile();
+    }
+  }, [visible, session, isGuest]);
 
   // Posición inicial del panel fuera de la pantalla (a la derecha)
   const translateX = useRef(new Animated.Value(width)).current;
@@ -55,10 +79,10 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
   if (!visible) return null;
 
   const userData = {
-    aka: session?.user?.email ? session.user.email.split('@')[0] : 'Invitado',
-    isVerified: true,
-    disciplines: ['MC', 'Beatmaker'],
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+    aka: profile?.username || (session?.user?.email ? session.user.email.split('@')[0] : 'Invitado'),
+    isVerified: profile?.is_verified === true,
+    disciplines: profile?.disciplines?.length > 0 ? profile.disciplines : [],
+    avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
   };
 
   return (
