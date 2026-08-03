@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Alert, View, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import { supabase } from './lib/supabase';
@@ -128,38 +129,42 @@ export default function App() {
   // Pantalla de carga mientras lee la sesión de Supabase
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' }}>
-        <ActivityIndicator size="large" color="#facc15" />
-      </View>
+      <SafeAreaProvider>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' }}>
+          <ActivityIndicator size="large" color="#facc15" />
+        </View>
+      </SafeAreaProvider>
     );
   }
 
-  // Renderizado según el estado, ENVOLEVIENDO TODO EN NavigationContainer
+  // Renderizado según el estado, ENVOLEVIENDO TODO EN SafeAreaProvider + NavigationContainer
   return (
-    <NavigationContainer>
-      {showResetPassword ? (
-        <ResetPasswordScreen onDone={() => setShowResetPassword(false)} />
-      ) : needsOnboarding ? (
-        <OnboardingScreen onComplete={handleOnboardingComplete} session={session} />
-      ) : session || isGuest ? (
-        <MainScreen
-          session={session}
-          isGuest={isGuest}
-          userProfile={userProfile}
-          onRequireAuth={handleRequireAuth}
-        />
-      ) : showRegister ? (
-        <RegisterScreen
-          onBackToLogin={handleCloseRegister}
-          onRegisterSuccess={handleRegisterSuccess}
-        />
-      ) : (
-        <AuthScreen
-          onLoginSuccess={handleLoginSuccess}
-          onEnterAsGuest={() => setIsGuest(true)}
-          onCreateAccount={handleOpenRegister}
-        />
-      )}
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        {showResetPassword ? (
+          <ResetPasswordScreen onDone={() => setShowResetPassword(false)} />
+        ) : needsOnboarding ? (
+          <OnboardingScreen onComplete={handleOnboardingComplete} session={session} />
+        ) : session || isGuest ? (
+          <MainScreen
+            session={session}
+            isGuest={isGuest}
+            userProfile={userProfile}
+            onRequireAuth={handleRequireAuth}
+          />
+        ) : showRegister ? (
+          <RegisterScreen
+            onBackToLogin={handleCloseRegister}
+            onRegisterSuccess={handleRegisterSuccess}
+          />
+        ) : (
+          <AuthScreen
+            onLoginSuccess={handleLoginSuccess}
+            onEnterAsGuest={() => setIsGuest(true)}
+            onCreateAccount={handleOpenRegister}
+          />
+        )}
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }

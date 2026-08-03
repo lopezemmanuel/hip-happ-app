@@ -11,36 +11,12 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
 
-export default function UserDrawer({ visible, onClose, session, isGuest, onLogout }) {
+export default function UserDrawer({ visible, onClose, session, isGuest, onLogout, onEditProfile, onViewProfile, profile }) {
   const [notifications, setNotifications] = React.useState(true);
   const [selectedCity, setSelectedCity] = React.useState('Buenos Aires, AR');
-  const [profile, setProfile] = React.useState(null);
-
-  useEffect(() => {
-    async function fetchProfile() {
-      if (isGuest || !session?.user?.id) {
-        setProfile(null);
-        return;
-      }
-      const { data, error } = await supabase
-        .from('users')
-        .select('username, full_name, is_verified, disciplines, avatar_url')
-        .eq('id', session.user.id)
-        .maybeSingle();
-
-      if (!error && data) {
-        setProfile(data);
-      }
-    }
-
-    if (visible) {
-      fetchProfile();
-    }
-  }, [visible, session, isGuest]);
 
   // Posición inicial del panel fuera de la pantalla (a la derecha)
   const translateX = useRef(new Animated.Value(width)).current;
@@ -77,6 +53,17 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
   }, [visible]);
 
   if (!visible) return null;
+
+  // El perfil ya viene cargado desde MainScreen (fetch al montar la pantalla,
+  // no al abrir la solapa), así que se muestra al instante sin esperas.
+  // Orden de prioridad: Administrador > Cuenta verificada > Perfil validado > (nada, Usuario Común)
+  const roleLabel = profile?.role === 'admin'
+    ? 'Administrador'
+    : profile?.is_verified === true
+      ? 'Cuenta verificada'
+      : profile?.is_validated === true
+        ? 'Perfil validado'
+        : null;
 
   const userData = {
     aka: profile?.username || (session?.user?.email ? session.user.email.split('@')[0] : 'Invitado'),
@@ -159,33 +146,64 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
 
           {/* 1. MI PERFIL */}
           <View style={{ alignItems: 'center', marginBottom: 24, borderBottomWidth: 1, borderBottomColor: '#1e293b', paddingBottom: 20 }}>
-            <View style={{ position: 'relative', marginBottom: 12 }}>
-              <Image
-                source={{ uri: isGuest ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80' : userData.avatar }}
-                style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: '#facc15' }}
-              />
-              {!isGuest && userData.isVerified && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    right: 0,
-                    backgroundColor: '#facc15',
-                    borderRadius: 12,
-                    width: 24,
-                    height: 24,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="checkmark-sharp" size={16} color="#000000" />
-                </View>
-              )}
-            </View>
+            <TouchableOpacity
+              activeOpacity={isGuest ? 1 : 0.8}
+              disabled={isGuest}
+              onPress={() => onViewProfile?.()}
+              style={{ alignItems: 'center' }}
+            >
+              <View style={{ position: 'relative', marginBottom: 12 }}>
+                <Image
+                  source={{ uri: isGuest ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80' : userData.avatar }}
+                  style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: '#facc15' }}
+                />
+                {!isGuest && userData.isVerified && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
+                      backgroundColor: '#facc15',
+                      borderRadius: 12,
+                      width: 24,
+                      height: 24,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="checkmark-sharp" size={16} color="#000000" />
+                  </View>
+                )}
+              </View>
 
-            <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: '800', textAlign: 'center' }}>
-              {isGuest ? 'Modo Invitado' : `@${userData.aka}`}
-            </Text>
+              <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: '800', textAlign: 'center' }}>
+                {isGuest ? 'Modo Invitado' : `${userData.aka}`}
+              </Text>
+            </TouchableOpacity>
+
+            {/* CORREO ELECTRÓNICO (debajo del AKA) */}
+            {!isGuest && !!session?.user?.email && (
+              <Text style={{ color: '#94a3b8', fontSize: 13, marginTop: 4 }}>
+                {session.user.email}
+              </Text>
+            )}
+
+            {/* ETIQUETA DE ROL (debajo del correo; nada si es Usuario Común) */}
+            {!isGuest && !!roleLabel && (
+              <View
+                style={{
+                  backgroundColor: 'rgba(250, 204, 21, 0.15)',
+                  borderWidth: 1,
+                  borderColor: '#facc15',
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 3,
+                  marginTop: 8,
+                }}
+              >
+                <Text style={{ color: '#facc15', fontSize: 11, fontWeight: '800' }}>{roleLabel}</Text>
+              </View>
+            )}
 
             {/* DISCIPLINAS (Solo si no es invitado) */}
             {!isGuest && (
@@ -223,7 +241,7 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
                 /* BOTONES PARA USUARIOS LOGUEADOS */
                 <>
                   <TouchableOpacity
-                    onPress={() => Alert.alert('Editar Perfil', 'Próximamente podrás editar tus datos.')}
+                    onPress={() => onEditProfile?.()}
                     style={{ backgroundColor: '#1e293b', borderRadius: 12, paddingVertical: 10, alignItems: 'center' }}
                   >
                     <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>Editar Perfil</Text>

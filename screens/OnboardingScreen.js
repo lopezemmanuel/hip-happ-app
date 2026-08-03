@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
@@ -140,7 +140,7 @@ export default function OnboardingScreen({ onComplete, session }) {
         {/* CAMPO A.K.A. */}
         <View style={{ width: '100%', marginBottom: 28 }}>
           <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '700', marginBottom: 8 }}>
-            Tu A.K.A. (Nombre de Usuario) *
+            A.K.A. (Nombre de usuario) *
           </Text>
           <TextInput
             value={aka}

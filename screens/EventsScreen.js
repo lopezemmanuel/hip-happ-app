@@ -126,9 +126,10 @@ const MOCK_EVENTS = [
   },
 ];
 
-export default function EventsScreen({ onSelectEvent, session, isGuest, userRole, isVerified }) {
+export default function EventsScreen({ onSelectEvent, session, isGuest, userRole, isVerified, isValidated, onRequestValidation, autoOpenCreate, onAutoOpenHandled }) {
   const [filter, setFilter] = useState('Todos');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [showValidationPrompt, setShowValidationPrompt] = useState(false);
   const [eventToEdit, setEventToEdit] = useState(null);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,7 +140,29 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
 
   const categories = ['Todos', ...EVENT_TYPES];
   const isAdmin = userRole?.toLowerCase() === 'admin';
-  const canManageEvents = !isGuest && (isAdmin || isVerified === true);
+  // Los 3 niveles que ya pueden publicar sin pasar por la validación
+  const canManageEvents = !isGuest && (isAdmin || isVerified === true || isValidated === true);
+
+  // Al volver de "Validar mi perfil" ya aprobado, entra directo a crear el evento
+  // sin que el usuario tenga que tocar "Crear evento" de nuevo.
+  useEffect(() => {
+    if (autoOpenCreate) {
+      setShowCreateEvent(true);
+      onAutoOpenHandled?.();
+    }
+  }, [autoOpenCreate]);
+
+  const handleCreateEventPress = () => {
+    if (isGuest) {
+      Alert.alert('Cuenta requerida', 'Para crear un evento necesitás iniciar sesión o crear una cuenta.');
+      return;
+    }
+    if (canManageEvents) {
+      setShowCreateEvent(true);
+    } else {
+      setShowValidationPrompt(true);
+    }
+  };
 
   const canEditEvent = (event) => {
     if (!event || isGuest) return false;
@@ -309,25 +332,23 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
           Fechas, batallas y encuentros de la cultura urbana.
         </Text>
 
-        {/* BOTÓN INGRESAR EVENTO */}
-        {canManageEvents && (
-          <TouchableOpacity
-            onPress={() => setShowCreateEvent(true)}
-            style={{
-              backgroundColor: '#facc15',
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              borderRadius: 14,
-              alignSelf: 'flex-start',
-              marginBottom: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}
-          >
-            <Ionicons name="add-circle-outline" size={18} color="#000000" style={{ marginRight: 6 }} />
-            <Text style={{ color: '#000000', fontWeight: '800', fontSize: 13 }}>Ingresar evento</Text>
-          </TouchableOpacity>
-        )}
+        {/* BOTÓN CREAR EVENTO: visible para todos, el comportamiento cambia según el nivel de usuario */}
+        <TouchableOpacity
+          onPress={handleCreateEventPress}
+          style={{
+            backgroundColor: '#facc15',
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 14,
+            alignSelf: 'flex-start',
+            marginBottom: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <Ionicons name="add-circle-outline" size={18} color="#000000" style={{ marginRight: 6 }} />
+          <Text style={{ color: '#000000', fontWeight: '800', fontSize: 13 }}>Crear evento</Text>
+        </TouchableOpacity>
 
         {/* FILTROS POR CATEGORÍA */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, maxHeight: 40 }}>
@@ -637,6 +658,39 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
                 </>
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: VALIDAR PERFIL (para "Usuario Común" al intentar crear un evento) */}
+      <Modal
+        visible={showValidationPrompt}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowValidationPrompt(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(2,6,23,0.85)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ width: '100%', backgroundColor: '#0f172a', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: '#1e293b' }}>
+            <TouchableOpacity
+              onPress={() => setShowValidationPrompt(false)}
+              style={{ position: 'absolute', top: 12, right: 12, padding: 6, zIndex: 1 }}
+            >
+              <Ionicons name="close" size={22} color="#94a3b8" />
+            </TouchableOpacity>
+
+            <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '700', textAlign: 'center', marginTop: 10, marginBottom: 20, lineHeight: 22 }}>
+              Para publicar tu primer evento necesitamos validar tu perfil.{"\n"}Solo te tomará 1 minuto.
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => {
+                setShowValidationPrompt(false);
+                onRequestValidation?.();
+              }}
+              style={{ backgroundColor: '#facc15', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: '#000000', fontWeight: '800', fontSize: 15 }}>Validar mi Perfil</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

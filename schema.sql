@@ -7,12 +7,23 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
+  aka TEXT,
   username TEXT UNIQUE,
   avatar_url TEXT,
   bio TEXT,
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'artist', 'admin')),
   is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  is_validated BOOLEAN NOT NULL DEFAULT FALSE,
   disciplines TEXT[] DEFAULT '{}',
+  instagram_username TEXT,
+  facebook_url TEXT,
+  x_username TEXT,
+  spotify_url TEXT,
+  soundcloud_url TEXT,
+  youtube_url TEXT,
+  website_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -48,6 +59,18 @@ CREATE TABLE IF NOT EXISTS public.artists (
   verified BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Tabla de solicitudes de validación de perfil ("Perfil Validado")
+CREATE TABLE IF NOT EXISTS public.artist_verifications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  real_name TEXT NOT NULL,
+  artistic_name TEXT NOT NULL,
+  genre TEXT NOT NULL,
+  social_link TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Tabla de eventos
@@ -104,6 +127,7 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.artists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.artist_verifications ENABLE ROW LEVEL SECURITY;
 
 -- Políticas públicas de lectura
 CREATE POLICY "Users are viewable by everyone"
@@ -201,3 +225,22 @@ CREATE POLICY "Users can delete their own news"
   ON public.news
   FOR DELETE
   USING (author_id = auth.uid());
+
+-- Solicitudes de validación de perfil: el usuario ve/crea las suyas, los admins ven/editan todas
+CREATE POLICY "Users can view their own verification requests"
+  ON public.artist_verifications
+  FOR SELECT
+  USING (
+    user_id = auth.uid()
+    OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+  );
+
+CREATE POLICY "Users can insert their own verification requests"
+  ON public.artist_verifications
+  FOR INSERT
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Admins can update verification requests"
+  ON public.artist_verifications
+  FOR UPDATE
+  USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));

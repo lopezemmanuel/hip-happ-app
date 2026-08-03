@@ -5,7 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 export default function BottomTab({ activeTab, setActiveTab }) {
   const tabs = [
     { id: 'Home', label: 'Home', iconFamily: 'Ionicons', iconName: 'home' },
-    { id: 'Elementos', label: 'Elementos', iconFamily: 'Ionicons', iconName: 'grid' },
+    { id: 'Explorar', label: 'Explorar', iconFamily: 'Ionicons', iconName: 'search' },
     { id: 'Eventos', label: 'Eventos', iconFamily: 'MaterialCommunityIcons', iconName: 'calendar-month' },
     { id: 'Comunidad', label: 'Comunidad', iconFamily: 'Ionicons', iconName: 'people' },
   ];
