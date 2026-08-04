@@ -10,34 +10,9 @@ import CommunityScreen from './CommunityScreen';
 import EditProfileScreen from './EditProfileScreen';
 import ProfileScreen from './ProfileScreen';
 import ArtistVerificationScreen from './ArtistVerificationScreen';
+import NewPostScreen from './NewPostScreen';
+import HomeFeedScreen from './HomeFeedScreen';
 import { supabase } from '../lib/supabase';
-
-const MOCK_NEWS = [
-  {
-    id: '1',
-    title: 'Anuncian la fecha oficial de la Final Nacional de Freestyle',
-    category: 'Competencias',
-    date: 'Hace 2 hs',
-    image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-    excerpt: 'Los mejores clasificatorios se enfrentarán el próximo mes en un evento épico.',
-  },
-  {
-    id: '2',
-    title: 'Nuevo álbum colaborativo reúne a referentes del Beatmaking',
-    category: 'Música & Beats',
-    date: 'Hace 5 hs',
-    image: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=600&auto=format&fit=crop&q=80',
-    excerpt: 'Un proyecto independiente que fusiona ritmos clásicos de Boom Bap con sonidos modernos.',
-  },
-  {
-    id: '3',
-    title: 'Murales & Graffiti: Exposición urbana en el centro cultural',
-    category: 'Arte Urbano',
-    date: 'Ayer',
-    image: 'https://images.unsplash.com/photo-1561055657-b9e0bf0fa360?w=600&auto=format&fit=crop&q=80',
-    excerpt: 'Artistas locales se reúnen para intervenir en vivo las paredes del anfiteatro.',
-  },
-];
 
 export default function MainScreen({ session, isGuest, userProfile, onRequireAuth }) {
   const [activeTab, setActiveTab] = useState('Home');
@@ -47,6 +22,7 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
   const [pendingOpenCreateEvent, setPendingOpenCreateEvent] = useState(false);
   const [profile, setProfile] = useState(null);
   const [viewedProfileId, setViewedProfileId] = useState(null);
+  const [showNewPost, setShowNewPost] = useState(false);
 
   // Traemos el perfil completo apenas se monta la pantalla (no cuando se abre
   // la solapa), para que esté listo de antemano y no haya que esperar.
@@ -99,62 +75,31 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
               {isGuest ? 'Modo Explorador (Invitado)' : `Conectado como: ${session?.user?.email}`}
             </Text>
 
-            <View style={{ width: '100%', marginTop: 12 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: '800' }}>
-                  Últimas Noticias 📰
+            {isGuest ? (
+              <TouchableOpacity
+                onPress={onRequireAuth}
+                style={{
+                  backgroundColor: 'rgba(250, 204, 21, 0.15)',
+                  borderColor: '#facc15',
+                  borderWidth: 1,
+                  padding: 14,
+                  borderRadius: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  width: '100%',
+                }}
+              >
+                <Ionicons name="lock-closed" size={20} color="#facc15" style={{ marginRight: 10 }} />
+                <Text style={{ color: '#ffffff', fontSize: 13, flex: 1, fontWeight: '600' }}>
+                  Estás en modo visitante. <Text style={{ color: '#facc15', textDecorationLine: 'underline' }}>Iniciá sesión</Text> para ver la actividad de la gente que seguís.
                 </Text>
-                <TouchableOpacity onPress={() => Alert.alert('Noticias', 'Mostrando todas las noticias...')}>
-                  <Text style={{ color: '#facc15', fontSize: 13, fontWeight: '700' }}>
-                    Ver todas
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {MOCK_NEWS.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.8}
-                  onPress={() => Alert.alert('Noticia', item.title)}
-                  style={{
-                    backgroundColor: '#0f172a',
-                    borderColor: '#1e293b',
-                    borderWidth: 1,
-                    borderRadius: 18,
-                    marginBottom: 14,
-                    padding: 12,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    minHeight: 100,
-                  }}
-                >
-                  <Image
-                    source={{ uri: item.image }}
-                    style={{ width: 76, height: 76, borderRadius: 12, marginRight: 12, backgroundColor: '#1e293b' }}
-                    resizeMode="cover"
-                  />
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <Text style={{ color: '#facc15', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>
-                        {item.category}
-                      </Text>
-                      <Text style={{ color: '#64748b', fontSize: 11 }}>
-                        {item.date}
-                      </Text>
-                    </View>
-                    <Text
-                      numberOfLines={2}
-                      style={{ color: '#ffffff', fontSize: 14, fontWeight: '700', lineHeight: 18, marginBottom: 4 }}
-                    >
-                      {item.title}
-                    </Text>
-                    <Text numberOfLines={1} style={{ color: '#94a3b8', fontSize: 12 }}>
-                      {item.excerpt}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+              </TouchableOpacity>
+            ) : (
+              <HomeFeedScreen
+                session={session}
+                onSelectUser={(user) => setViewedProfileId(user.id)}
+              />
+            )}
           </View>
         );
 
@@ -204,6 +149,16 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
             setProfile((prev) => ({ ...prev, ...updatedFields }));
           }
         }}
+      />
+    );
+  }
+
+  if (showNewPost) {
+    return (
+      <NewPostScreen
+        session={session}
+        onCancel={() => setShowNewPost(false)}
+        onPosted={() => setShowNewPost(false)}
       />
     );
   }
@@ -316,6 +271,7 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
             setViewedProfileId(null);
             setShowEditProfile(true);
           }}
+          onNewPost={() => setShowNewPost(true)}
         />
       )}
 

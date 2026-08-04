@@ -13,9 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
+import { uploadPickedImage } from '../lib/uploadImage';
 
 const DISCIPLINES_LIST = [
   'Agente', 'B-Boy', 'B-Girl', 'Beatboxer', 'Beatmaker', 'Breaker',
@@ -101,6 +100,7 @@ export default function EditProfileScreen({ session, onDone }) {
   const [lastName, setLastName] = useState('');
   const [originalFullName, setOriginalFullName] = useState('');
   const [bio, setBio] = useState('');
+  const [location, setLocation] = useState('');
   const [disciplines, setDisciplines] = useState([]);
 
   const [instagramUsername, setInstagramUsername] = useState('');
@@ -122,7 +122,7 @@ export default function EditProfileScreen({ session, onDone }) {
       }
       const { data, error } = await supabase
         .from('users')
-        .select('full_name, first_name, last_name, aka, username, bio, avatar_url, disciplines, instagram_username, facebook_url, x_username, spotify_url, soundcloud_url, youtube_url, website_url')
+        .select('full_name, first_name, last_name, aka, username, bio, location, avatar_url, disciplines, instagram_username, facebook_url, x_username, spotify_url, soundcloud_url, youtube_url, website_url')
         .eq('id', session.user.id)
         .maybeSingle();
 
@@ -134,6 +134,7 @@ export default function EditProfileScreen({ session, onDone }) {
         setLastName(data.last_name || '');
         setOriginalFullName(data.full_name || '');
         setBio(data.bio || '');
+        setLocation(data.location || '');
         setAvatarUrl(data.avatar_url || null);
         setDisciplines(data.disciplines || []);
         setInstagramUsername(data.instagram_username || '');
@@ -148,7 +149,7 @@ export default function EditProfileScreen({ session, onDone }) {
     }
 
     loadProfile();
-  }, [session]);
+  }, [session?.user?.id]);
 
   const checkUsername = async (value) => {
     const normalized = sanitizeUsername(value);
@@ -214,20 +215,10 @@ export default function EditProfileScreen({ session, onDone }) {
     const asset = result.assets[0];
     setUploadingAvatar(true);
     try {
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
       const fileExt = asset.uri.split('.').pop()?.split('?')[0] || 'jpg';
       const filePath = `${session.user.id}/${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, decode(base64), { contentType: asset.mimeType || 'image/jpeg', upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      setAvatarUrl(data.publicUrl);
+      const publicUrl = await uploadPickedImage('avatars', filePath, asset);
+      setAvatarUrl(publicUrl);
     } catch (err) {
       console.log('Error subiendo avatar:', err);
       Alert.alert('Error', 'No se pudo subir la foto. Intenta de nuevo.');
@@ -281,6 +272,7 @@ export default function EditProfileScreen({ session, onDone }) {
         last_name: lastCheck.value || null,
         full_name: combinedFullName || originalFullName || session.user.email,
         bio: bio.trim(),
+        location: location.trim().slice(0, 60) || null,
         avatar_url: avatarUrl,
         disciplines,
         instagram_username: igCheck.value || null,
@@ -473,6 +465,15 @@ export default function EditProfileScreen({ session, onDone }) {
           }}
         />
         <Text style={{ color: '#64748b', fontSize: 11, marginBottom: 16 }}>{bio.length}/150</Text>
+
+        <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '700', marginBottom: 6 }}>Ubicación</Text>
+        <TextInput
+          value={location}
+          onChangeText={(text) => setLocation(text.slice(0, 60))}
+          placeholder="Ej: Buenos Aires, AR"
+          placeholderTextColor="#64748b"
+          style={inputStyle}
+        />
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '700' }}>Disciplinas</Text>

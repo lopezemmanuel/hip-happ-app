@@ -80,7 +80,7 @@ export default function ArtistVerificationScreen({ session, onCancel, onDone }) 
     }
 
     loadProfile();
-  }, [session]);
+  }, [session?.user?.id]);
 
   const checkUsername = async (value) => {
     const normalized = sanitizeUsername(value);

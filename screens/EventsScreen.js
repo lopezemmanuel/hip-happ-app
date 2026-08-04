@@ -15,7 +15,9 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 import { Ionicons } from '@expo/vector-icons';
 import CreateEventScreen from './CreateEventScreen';
 import EventsMap from '../components/EventsMap';
+import EventCard from '../components/EventCard';
 import { supabase } from '../lib/supabase';
+import { toggleAttendance } from '../lib/toggles';
 
 // Tipos de evento disponibles
 const EVENT_TYPES = ['Freestyle', 'Show', 'Batallas', 'Dance', 'DJing', 'Jam', 'Cypher', 'Breaking', 'Festival', 'Taller', 'Expo', 'Graffiti', 'Street art', 'Encuentro'];
@@ -137,6 +139,7 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
   const [focusEventId, setFocusEventId] = useState(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [attendanceMap, setAttendanceMap] = useState({});
 
   const categories = ['Todos', ...EVENT_TYPES];
   const isAdmin = userRole?.toLowerCase() === 'admin';
@@ -203,9 +206,55 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
     }
   };
 
+  const fetchAttendance = async (eventList) => {
+    const ids = eventList.map((e) => e.id).filter((id) => typeof id === 'string');
+    if (ids.length === 0) {
+      setAttendanceMap({});
+      return;
+    }
+    const { data, error } = await supabase
+      .from('event_attendance')
+      .select('event_id, user_id')
+      .in('event_id', ids);
+    if (error) return;
+
+    const map = {};
+    (data || []).forEach((row) => {
+      if (!map[row.event_id]) map[row.event_id] = { count: 0, isAttending: false };
+      map[row.event_id].count += 1;
+      if (row.user_id === session?.user?.id) map[row.event_id].isAttending = true;
+    });
+    setAttendanceMap(map);
+  };
+
+  const handleToggleAttendance = async (event) => {
+    if (isGuest || !session?.user?.id) {
+      Alert.alert('Cuenta requerida', 'Para marcar que asistirás a un evento necesitás iniciar sesión o crear una cuenta.');
+      return;
+    }
+    const current = attendanceMap[event.id] || { count: 0, isAttending: false };
+    const nextIsAttending = !current.isAttending;
+
+    // Actualización optimista para que el botón responda al instante.
+    setAttendanceMap((prev) => ({
+      ...prev,
+      [event.id]: { count: current.count + (nextIsAttending ? 1 : -1), isAttending: nextIsAttending },
+    }));
+
+    const { error } = await toggleAttendance(event.id, session.user.id, current.isAttending);
+    if (error) {
+      setAttendanceMap((prev) => ({ ...prev, [event.id]: current }));
+      Alert.alert('Error', 'No se pudo actualizar tu asistencia.');
+    }
+  };
+
   useEffect(() => {
     fetchEvents();
   }, []);
+
+  useEffect(() => {
+    if (events.length > 0) fetchAttendance(events);
+  }, [events, session?.user?.id]);
 
   const filteredEvents = events.filter((event) => {
     if (filter === 'Todos') return true;
@@ -396,110 +445,22 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
           <ActivityIndicator size="large" color="#facc15" style={{ marginTop: 20 }} />
         ) : (
           filteredEvents.map((event) => {
-            const isSelected = selectedEventId === event.id;
-            const imageUrl = event.image || event.image_url || event.imageUrl || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80';
-            const eventDate = event.date || formatEventDateLabel(event.event_date) || 'Sin fecha';
-            const eventTime = formatTimeLabel(event.time || parseEventTimeFromDescription(event.description));
-            const tags = getSelectedTags(event);
-            const priceTag = event.price || event.precio;
+            const attendance = attendanceMap[event.id] || { count: 0, isAttending: false };
 
             return (
-              <TouchableOpacity
-                key={event.id}
-                onPress={() => {
-                  setSelectedEventId(event.id);
-                  setFocusEventId(event.id);
-                }}
-                activeOpacity={0.9}
-                style={{
-                  backgroundColor: isSelected ? '#111827' : '#0f172a',
-                  borderColor: isSelected ? '#facc15' : '#1e293b',
-                  borderWidth: isSelected ? 2 : 1,
-                  borderRadius: 20,
-                  marginBottom: 16,
-                  overflow: 'hidden',
-                }}
-              >
-                <View style={{ height: 160, width: '100%', position: 'relative' }}>
-                  <Image 
-                    source={{ uri: imageUrl }} 
-                    style={{ width: '100%', height: '100%' }} 
-                    resizeMode="cover" 
-                  />
-                  <View 
-                    style={{ 
-                      position: 'absolute', 
-                      top: 10, 
-                      left: 10, 
-                      right: 80, 
-                      flexDirection: 'row', 
-                      flexWrap: 'wrap', 
-                      zIndex: 10,
-                      paddingRight: 8,
-                    }}
-                  >
-                    {tags.map((tag, idx) => (
-                      <View 
-                        key={idx}
-                        style={{ 
-                          backgroundColor: 'rgba(2, 6, 23, 0.90)', 
-                          paddingHorizontal: 8, 
-                          paddingVertical: 4, 
-                          borderRadius: 8, 
-                          borderWidth: 1, 
-                          borderColor: '#facc15',
-                          marginRight: 6,
-                          marginBottom: 6,
-                        }}
-                      >
-                        <Text style={{ color: '#facc15', fontSize: 10, fontWeight: '800' }}>
-                          {tag}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  {priceTag ? (
-                    <View
-                      style={{
-                        position: 'absolute',
-                        top: 10,
-                        right: 10,
-                        backgroundColor: '#facc15',
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: '#facc15',
-                      }}
-                    >
-                      <Text style={{ color: '#020617', fontSize: 10, fontWeight: '800' }}>
-                        {priceTag}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                <View style={{ padding: 16, paddingRight: 60 }}>
-                  <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '700', marginBottom: 8 }}>{event.title}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                    <Ionicons name="calendar-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-                    <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '600', marginRight: 12 }}>{eventDate}</Text>
-                    {eventTime && (
-                      <>
-                        <Ionicons name="time-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-                        <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '600' }}>{eventTime}</Text>
-                      </>
-                    )}
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="location-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-                    <Text style={{ color: '#64748b', fontSize: 13 }} numberOfLines={1}>
-                      {event.location || event.address || 'Ubicación a confirmar'}
-                    </Text>
-                  </View>
-                </View>
-
+              <View key={event.id} style={{ position: 'relative' }}>
+                <EventCard
+                  event={event}
+                  tags={getSelectedTags(event)}
+                  selected={selectedEventId === event.id}
+                  onPress={() => {
+                    setSelectedEventId(event.id);
+                    setFocusEventId(event.id);
+                  }}
+                  isAttending={attendance.isAttending}
+                  attendanceCount={attendance.count}
+                  onToggleAttendance={() => handleToggleAttendance(event)}
+                />
                 <TouchableOpacity
                   onPress={() => {
                     setSelectedEvent(event);
@@ -520,7 +481,7 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
                 >
                   <Ionicons name="add" size={28} color="#000000" />
                 </TouchableOpacity>
-              </TouchableOpacity>
+              </View>
             );
           })
         )}

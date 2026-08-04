@@ -12,9 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
+import { uploadPickedImage } from '../lib/uploadImage';
 import EventsMap from '../components/EventsMap';
 
 const EVENT_TYPES = ['Freestyle', 'Show', 'Batallas', 'Dance', 'DJing', 'Jam', 'Cypher', 'Breaking', 'Festival', 'Taller', 'Expo', 'Graffiti', 'Street art', 'Encuentro'];
@@ -77,25 +76,13 @@ export default function CreateEventScreen({ onCancel, onCreateEvent, session, ev
     const asset = result.assets[0];
     setUploadingIndex(idx);
     try {
-      // fetch(uri).blob() sube archivos vacíos (0 bytes) en React Native.
-      // Leer como base64 y convertir a ArrayBuffer es el método que sí funciona.
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
       const fileExt = asset.uri.split('.').pop()?.split('?')[0] || 'jpg';
       const filePath = `${session?.user?.id || 'anon'}/${Date.now()}_${idx}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('event-images')
-        .upload(filePath, decode(base64), { contentType: asset.mimeType || 'image/jpeg', upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('event-images').getPublicUrl(filePath);
+      const publicUrl = await uploadPickedImage('event-images', filePath, asset);
 
       setImageUrls((prev) => {
         const updated = [...prev];
-        updated[idx] = data.publicUrl;
+        updated[idx] = publicUrl;
         return updated;
       });
     } catch (err) {
