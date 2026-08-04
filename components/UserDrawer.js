@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
+import { Image } from 'expo-image';
 import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   ScrollView,
   Switch,
   Alert,
@@ -66,7 +66,8 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
         : null;
 
   const userData = {
-    aka: profile?.username || (session?.user?.email ? session.user.email.split('@')[0] : 'Invitado'),
+    aka: profile?.aka || profile?.username || (session?.user?.email ? session.user.email.split('@')[0] : 'Invitado'),
+    username: profile?.username || null,
     isVerified: profile?.is_verified === true,
     disciplines: profile?.disciplines?.length > 0 ? profile.disciplines : [],
     avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
@@ -153,10 +154,16 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
               style={{ alignItems: 'center' }}
             >
               <View style={{ position: 'relative', marginBottom: 12 }}>
-                <Image
-                  source={{ uri: isGuest ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80' : userData.avatar }}
-                  style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: '#facc15' }}
-                />
+                {isGuest || profile ? (
+                  <Image
+                    source={{ uri: isGuest ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80' : userData.avatar }}
+                    style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: '#facc15' }}
+                  />
+                ) : (
+                  <View style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: '#facc15', backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="person" size={32} color="#64748b" />
+                  </View>
+                )}
                 {!isGuest && userData.isVerified && (
                   <View
                     style={{
@@ -180,6 +187,13 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
                 {isGuest ? 'Modo Invitado' : `${userData.aka}`}
               </Text>
             </TouchableOpacity>
+
+            {/* @USUARIO (debajo del AKA, más chico) */}
+            {!isGuest && !!userData.username && (
+              <Text style={{ color: '#facc15', fontSize: 13, fontWeight: '600', marginTop: 2 }}>
+                @{userData.username}
+              </Text>
+            )}
 
             {/* CORREO ELECTRÓNICO (debajo del AKA) */}
             {!isGuest && !!session?.user?.email && (

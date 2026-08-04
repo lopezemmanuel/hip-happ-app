@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Alert, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { View, Text, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import BottomTab from '../components/BottomTab';
@@ -13,6 +14,7 @@ import ArtistVerificationScreen from './ArtistVerificationScreen';
 import NewPostScreen from './NewPostScreen';
 import HomeFeedScreen from './HomeFeedScreen';
 import { supabase } from '../lib/supabase';
+import { getCachedProfileSync, getCachedProfile, setCachedProfile } from '../lib/profileCache';
 
 export default function MainScreen({ session, isGuest, userProfile, onRequireAuth }) {
   const [activeTab, setActiveTab] = useState('Home');
@@ -20,26 +22,40 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showValidateProfile, setShowValidateProfile] = useState(false);
   const [pendingOpenCreateEvent, setPendingOpenCreateEvent] = useState(false);
-  const [profile, setProfile] = useState(null);
+  // Arranca leyendo el último perfil conocido de esta cuenta en este
+  // dispositivo (guardado la vez anterior que se cargó bien), para que el
+  // primer render ya salga con el avatar/nombre correcto — sin esperar la
+  // consulta a Supabase, que siempre tarda un poco.
+  const [profile, setProfile] = useState(() => getCachedProfileSync(session?.user?.id));
   const [viewedProfileId, setViewedProfileId] = useState(null);
   const [showNewPost, setShowNewPost] = useState(false);
 
   // Traemos el perfil completo apenas se monta la pantalla (no cuando se abre
   // la solapa), para que esté listo de antemano y no haya que esperar.
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchProfile() {
       if (isGuest || !session?.user?.id) return;
 
       // Si userProfile ya viene cargado con los datos (recién después del onboarding)
       if (userProfile) {
-        setProfile(userProfile);
+        const withId = { ...userProfile, id: session.user.id };
+        setProfile(withId);
+        setCachedProfile(session.user.id, withId);
         return;
       }
+
+      // Si no lo teníamos ya como valor inicial (primera vez en este
+      // dispositivo, o después de un logout que limpió el estado), lo
+      // buscamos en caché igual antes de ir a la red.
+      const cached = await getCachedProfile(session.user.id);
+      if (!cancelled && cached) setProfile(cached);
 
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('role, is_verified, is_validated, username, full_name, avatar_url, disciplines')
+          .select('id, role, is_verified, is_validated, username, aka, full_name, avatar_url, disciplines')
           .eq('id', session.user.id)
           .maybeSingle(); // 👈 Usamos maybeSingle para evitar excepciones en caso de no hallar registros
 
@@ -48,8 +64,9 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
           return;
         }
 
-        if (data) {
+        if (data && !cancelled) {
           setProfile(data);
+          setCachedProfile(session.user.id, data);
         }
       } catch (err) {
         console.log('Error inesperado al consultar perfil:', err);
@@ -57,11 +74,21 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
     }
 
     fetchProfile();
-  }, [session, userProfile, isGuest]);
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, userProfile, isGuest]);
 
-  const userRole = profile?.role ?? null;
-  const isVerified = profile?.is_verified === true;
-  const isValidated = profile?.is_validated === true;
+  // No confiamos en `profile` hasta que coincida con la sesión actual: entre
+  // que cambia `session` y termina de correr el fetch de arriba, React ya
+  // pintó al menos un frame con los datos de la cuenta anterior. Filtrando
+  // acá (en el render, no en un efecto) evitamos ese flash del avatar/nombre
+  // viejo al cambiar de cuenta.
+  const currentProfile = profile?.id === session?.user?.id ? profile : null;
+
+  const userRole = currentProfile?.role ?? null;
+  const isVerified = currentProfile?.is_verified === true;
+  const isValidated = currentProfile?.is_validated === true;
 
   const renderContent = () => {
     switch (activeTab) {
@@ -146,7 +173,11 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
         onDone={(updatedFields) => {
           setShowEditProfile(false);
           if (updatedFields) {
-            setProfile((prev) => ({ ...prev, ...updatedFields }));
+            setProfile((prev) => {
+              const next = { ...prev, ...updatedFields };
+              setCachedProfile(session.user.id, next);
+              return next;
+            });
           }
         }}
       />
@@ -171,7 +202,11 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
         onDone={(updatedFields) => {
           setShowValidateProfile(false);
           if (updatedFields) {
-            setProfile((prev) => ({ ...prev, ...updatedFields }));
+            setProfile((prev) => {
+              const next = { ...prev, ...updatedFields };
+              setCachedProfile(session.user.id, next);
+              return next;
+            });
           }
           // Por ahora, en esta etapa, no hace falta esperar la revisión: lo mandamos
           // directo a crear su evento.
@@ -212,14 +247,25 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
           activeOpacity={0.8}
           style={{ position: 'relative' }}
         >
-          <Image
-            source={{
-              uri: isGuest
-                ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80'
-                : (profile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'),
-            }}
-            style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15' }}
-          />
+          {isGuest ? (
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80' }}
+              style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15' }}
+            />
+          ) : currentProfile ? (
+            <Image
+              source={{ uri: currentProfile.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80' }}
+              style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15' }}
+            />
+          ) : (
+            // Todavía no sabemos si esta cuenta tiene avatar o no: mejor un
+            // círculo vacío que mostrar la foto de stock y después "pegar el salto".
+            <View
+              style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15', backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons name="person" size={18} color="#64748b" />
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -246,7 +292,7 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
         onClose={() => setDrawerVisible(false)}
         session={session}
         isGuest={isGuest}
-        profile={profile}
+        profile={currentProfile}
         onLogout={() => {
           setDrawerVisible(false);
           onRequireAuth();

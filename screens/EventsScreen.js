@@ -4,14 +4,10 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Image,
   ActivityIndicator,
   Modal,
-  Dimensions,
   Alert,
 } from 'react-native';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
 import { Ionicons } from '@expo/vector-icons';
 import CreateEventScreen from './CreateEventScreen';
 import EventsMap from '../components/EventsMap';
@@ -137,8 +133,6 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [focusEventId, setFocusEventId] = useState(null);
-  const [showEventDetails, setShowEventDetails] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState(null);
   const [attendanceMap, setAttendanceMap] = useState({});
 
   const categories = ['Todos', ...EVENT_TYPES];
@@ -311,7 +305,6 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
 
   const handleEditRequest = (event) => {
     setEventToEdit(event);
-    setShowEventDetails(false);
     setShowCreateEvent(true);
   };
 
@@ -331,7 +324,6 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
               return;
             }
             setEvents((prev) => prev.filter((e) => e.id !== event.id));
-            setShowEventDetails(false);
           },
         },
       ]
@@ -359,13 +351,6 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
       />
     );
   }
-
-  const selectedEventImages = selectedEvent
-    ? (selectedEvent.image_urls?.length > 0
-        ? selectedEvent.image_urls
-        : [selectedEvent.image || selectedEvent.image_url]
-      ).filter(Boolean)
-    : [];
 
   return (
     <>
@@ -448,180 +433,26 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
             const attendance = attendanceMap[event.id] || { count: 0, isAttending: false };
 
             return (
-              <View key={event.id} style={{ position: 'relative' }}>
-                <EventCard
-                  event={event}
-                  tags={getSelectedTags(event)}
-                  selected={selectedEventId === event.id}
-                  onPress={() => {
-                    setSelectedEventId(event.id);
-                    setFocusEventId(event.id);
-                  }}
-                  isAttending={attendance.isAttending}
-                  attendanceCount={attendance.count}
-                  onToggleAttendance={() => handleToggleAttendance(event)}
-                />
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedEvent(event);
-                    setShowEventDetails(true);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    bottom: 10,
-                    right: 10,
-                    backgroundColor: '#facc15',
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 5,
-                  }}
-                >
-                  <Ionicons name="add" size={28} color="#000000" />
-                </TouchableOpacity>
-              </View>
+              <EventCard
+                key={event.id}
+                event={event}
+                tags={getSelectedTags(event)}
+                selected={selectedEventId === event.id}
+                onPress={() => {
+                  setSelectedEventId(event.id);
+                  setFocusEventId(event.id);
+                }}
+                isAttending={attendance.isAttending}
+                attendanceCount={attendance.count}
+                onToggleAttendance={() => handleToggleAttendance(event)}
+                isOwner={canEditEvent(event)}
+                onEdit={() => handleEditRequest(event)}
+                onDelete={() => handleDeleteEvent(event)}
+              />
             );
           })
         )}
       </ScrollView>
-
-      <Modal
-        visible={showEventDetails}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowEventDetails(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(2,6,23,0.85)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#0f172a', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '85%' }}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              {selectedEvent && (
-                <>
-                  <View style={{ height: 220, position: 'relative' }}>
-                    {selectedEventImages.length > 0 ? (
-                      <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-                        {selectedEventImages.map((url, idx) => (
-                          <Image
-                            key={idx}
-                            source={{ uri: url }}
-                            style={{ width: SCREEN_WIDTH, height: 220 }}
-                            resizeMode="cover"
-                          />
-                        ))}
-                      </ScrollView>
-                    ) : (
-                      <View style={{ width: '100%', height: 220, backgroundColor: '#1e293b' }} />
-                    )}
-                    <TouchableOpacity
-                      onPress={() => setShowEventDetails(false)}
-                      style={{
-                        position: 'absolute',
-                        top: 12,
-                        right: 12,
-                        backgroundColor: 'rgba(2,6,23,0.85)',
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Ionicons name="close" size={20} color="#ffffff" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={{ padding: 20 }}>
-                    <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: '800', marginBottom: 8 }}>
-                      {selectedEvent.title}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                      <Ionicons name="calendar-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-                      <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '600', marginRight: 12 }}>
-                        {selectedEvent.date || formatEventDateLabel(selectedEvent.event_date) || 'Sin fecha'}
-                      </Text>
-                      {formatTimeLabel(selectedEvent.time || parseEventTimeFromDescription(selectedEvent.description)) && (
-                        <>
-                          <Ionicons name="time-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-                          <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '600' }}>
-                            {formatTimeLabel(selectedEvent.time || parseEventTimeFromDescription(selectedEvent.description))}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                      <Ionicons name="location-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-                      <Text style={{ color: '#64748b', fontSize: 13 }}>
-                        {selectedEvent.location || selectedEvent.address || 'Ubicación a confirmar'}
-                      </Text>
-                    </View>
-                    {(selectedEvent.price || selectedEvent.precio) && (
-                      <View
-                        style={{
-                          alignSelf: 'flex-start',
-                          backgroundColor: '#1e293b',
-                          borderWidth: 1,
-                          borderColor: '#facc15',
-                          borderRadius: 10,
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          marginBottom: 14,
-                        }}
-                      >
-                        <Text style={{ color: '#facc15', fontSize: 12, fontWeight: '800' }}>
-                          {selectedEvent.price || selectedEvent.precio}
-                        </Text>
-                      </View>
-                    )}
-                    {selectedEvent.description_long && (
-                      <Text style={{ color: '#cbd5e1', fontSize: 14, lineHeight: 20 }}>
-                        {selectedEvent.description_long}
-                      </Text>
-                    )}
-                    {canEditEvent(selectedEvent) && (
-                      <View style={{ flexDirection: 'row', marginTop: 20, gap: 10 }}>
-                        <TouchableOpacity
-                          onPress={() => handleEditRequest(selectedEvent)}
-                          style={{
-                            flex: 1,
-                            backgroundColor: '#1e293b',
-                            borderWidth: 1,
-                            borderColor: '#facc15',
-                            borderRadius: 12,
-                            paddingVertical: 12,
-                            flexDirection: 'row',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Ionicons name="pencil" size={16} color="#facc15" style={{ marginRight: 6 }} />
-                          <Text style={{ color: '#facc15', fontWeight: '800', fontSize: 13 }}>Editar</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleDeleteEvent(selectedEvent)}
-                          style={{
-                            flex: 1,
-                            backgroundColor: '#1e293b',
-                            borderWidth: 1,
-                            borderColor: '#ef4444',
-                            borderRadius: 12,
-                            paddingVertical: 12,
-                            flexDirection: 'row',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Ionicons name="trash" size={16} color="#ef4444" style={{ marginRight: 6 }} />
-                          <Text style={{ color: '#ef4444', fontWeight: '800', fontSize: 13 }}>Eliminar</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* MODAL: VALIDAR PERFIL (para "Usuario Común" al intentar crear un evento) */}
       <Modal

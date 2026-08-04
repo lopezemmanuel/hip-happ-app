@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
@@ -7,7 +8,7 @@ const RESULTS_LIMIT = 25;
 const SUGGESTIONS_LIMIT = 20;
 const DEBOUNCE_MS = 350;
 
-const USER_FIELDS = 'id, username, aka, first_name, last_name, avatar_url, disciplines';
+const USER_FIELDS = 'id, username, aka, avatar_url, disciplines';
 
 export default function SearchScreen({ onSelectUser }) {
   const [query, setQuery] = useState('');
@@ -42,7 +43,7 @@ export default function SearchScreen({ onSelectUser }) {
     const { data, error } = await supabase
       .from('users')
       .select(USER_FIELDS)
-      .or(`username.ilike.${like},aka.ilike.${like},first_name.ilike.${like},last_name.ilike.${like}`)
+      .or(`username.ilike.${like},aka.ilike.${like}`)
       .limit(RESULTS_LIMIT);
 
     setLoading(false);
@@ -81,7 +82,7 @@ export default function SearchScreen({ onSelectUser }) {
   const handleClear = () => setQuery('');
 
   const renderUserCard = ({ item }) => {
-    const displayName = item.aka || `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'Usuario';
+    const displayName = item.aka || item.username || 'Usuario';
     const disciplines = Array.isArray(item.disciplines) ? item.disciplines : [];
 
     return (
@@ -181,7 +182,7 @@ export default function SearchScreen({ onSelectUser }) {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Buscar por nombre, @usuario, AKA o disciplina..."
+          placeholder="Buscar por @usuario o AKA..."
           placeholderTextColor="#64748b"
           style={{ flex: 1, color: '#ffffff', paddingVertical: 12, fontSize: 14 }}
         />

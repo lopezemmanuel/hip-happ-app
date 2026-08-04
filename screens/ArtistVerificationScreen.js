@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
+import { uploadPickedImage } from '../lib/uploadImage';
 
 // Solo minúsculas, números, guiones bajos y puntos. Máximo 24 caracteres.
 const sanitizeUsername = (value) => value.toLowerCase().replace(/[^a-z0-9_.]/g, '').slice(0, 24);
@@ -133,20 +133,10 @@ export default function ArtistVerificationScreen({ session, onCancel, onDone }) 
     const asset = result.assets[0];
     setUploadingAvatar(true);
     try {
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
       const fileExt = asset.uri.split('.').pop()?.split('?')[0] || 'jpg';
       const filePath = `${session?.user?.id || 'anon'}/${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, decode(base64), { contentType: asset.mimeType || 'image/jpeg', upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      setAvatarUrl(data.publicUrl);
+      const publicUrl = await uploadPickedImage('avatars', filePath, asset);
+      setAvatarUrl(publicUrl);
     } catch (err) {
       console.log('Error subiendo avatar:', err);
       Alert.alert('Error', 'No se pudo subir la foto. Intenta de nuevo.');

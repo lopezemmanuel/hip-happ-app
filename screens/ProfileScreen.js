@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, ActivityIndicator, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { toggleFollow, toggleLike, toggleAttendance } from '../lib/toggles';
 import EventCard from '../components/EventCard';
 
-const PROFILE_FIELDS = 'id, username, aka, first_name, last_name, avatar_url, bio, location, disciplines, is_verified, instagram_username, facebook_url, x_username, spotify_url, soundcloud_url, youtube_url, website_url';
+const PROFILE_FIELDS = 'id, username, aka, avatar_url, bio, location, disciplines, is_verified, instagram_username, facebook_url, x_username, spotify_url, soundcloud_url, youtube_url, website_url';
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
 
@@ -238,7 +239,7 @@ export default function ProfileScreen({ userId, session, onBack, onEditProfile, 
     }
   };
 
-  const displayName = profile?.aka || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Usuario';
+  const displayName = profile?.aka || profile?.username || 'Usuario';
   const disciplines = Array.isArray(profile?.disciplines) ? profile.disciplines : [];
   const socialLinks = profile ? buildSocialLinks(profile) : [];
 

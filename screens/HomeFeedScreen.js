@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { toggleLike, toggleAttendance } from '../lib/toggles';
@@ -9,11 +10,32 @@ function authorName(user) {
   return user?.aka || user?.username || 'Usuario';
 }
 
+function formatRelativeTime(isoDate) {
+  const date = new Date(isoDate);
+  const diffMin = Math.floor((Date.now() - date.getTime()) / 60000);
+
+  if (diffMin < 60) return `${Math.max(diffMin, 1)}m`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d`;
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date.getMonth() + 1;
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day}/${month}/${year}`;
+}
+
 export default function HomeFeedScreen({ session, onSelectUser }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [likeState, setLikeState] = useState({});
   const [attendanceState, setAttendanceState] = useState({});
+  const [expandedNewsIds, setExpandedNewsIds] = useState({});
+
+  const toggleNewsExpanded = (id) => {
+    setExpandedNewsIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const loadFeed = useCallback(async () => {
     if (!session?.user?.id) {
@@ -29,7 +51,10 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
 
     const followedIds = Array.from(new Set([...(followRows || []).map((r) => r.followed_id), session.user.id]));
 
-    const [postsRes, eventsRes, attendanceRes] = await Promise.all([
+    // Eventos y noticias/notas son públicos: aparecen para todos por defecto.
+    // Posteos y asistencias siguen dependiendo de a quién seguís (más
+    // adelante va a haber una config para elegir qué ver).
+    const [postsRes, eventsRes, attendanceRes, newsRes] = await Promise.all([
       supabase
         .from('posts')
         .select('*, author:users!posts_author_id_fkey(id, username, aka, avatar_url)')
@@ -38,8 +63,7 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
         .limit(30),
       supabase
         .from('events')
-        .select('*, organizer:users(id, username, aka, avatar_url)')
-        .in('organizer_id', followedIds)
+        .select('*, organizer:users!events_organizer_id_fkey(id, username, aka, avatar_url)')
         .order('created_at', { ascending: false })
         .limit(30),
       supabase
@@ -48,23 +72,31 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
         .in('user_id', followedIds)
         .order('created_at', { ascending: false })
         .limit(30),
+      supabase
+        .from('news')
+        .select('id, title, content, image_url, created_at, author:users!news_author_id_fkey(id, username, aka, avatar_url)')
+        .eq('published', true)
+        .order('created_at', { ascending: false })
+        .limit(30),
     ]);
 
     if (postsRes.error) console.log('Error cargando posteos del feed:', postsRes.error.message);
     if (eventsRes.error) console.log('Error cargando eventos del feed:', eventsRes.error.message);
     if (attendanceRes.error) console.log('Error cargando asistencias del feed:', attendanceRes.error.message);
+    if (newsRes.error) console.log('Error cargando noticias del feed:', newsRes.error.message);
 
     const posts = (postsRes.data || []).map((p) => ({ feedType: 'post', sortDate: p.created_at, ...p }));
     const events = (eventsRes.data || []).map((e) => ({ feedType: 'event', sortDate: e.created_at, ...e }));
     const attendances = (attendanceRes.data || [])
       .filter((a) => a.event)
       .map((a) => ({ feedType: 'attendance', sortDate: a.created_at, user: a.user, event: a.event }));
+    const newsItems = (newsRes.data || []).map((n) => ({ feedType: 'news', sortDate: n.created_at, ...n }));
 
     // Un mismo evento puede llegar por dos caminos (lo creó alguien que seguís
     // Y alguien que seguís marcó que va a asistir): nos quedamos con la
     // actividad más reciente de cada evento para no mostrarlo duplicado.
     const seenEventIds = new Set();
-    const merged = [...posts, ...events, ...attendances]
+    const merged = [...posts, ...events, ...attendances, ...newsItems]
       .sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate))
       .filter((item) => {
         if (item.feedType !== 'event' && item.feedType !== 'attendance') return true;
@@ -134,7 +166,7 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
     return (
       <View style={{ marginTop: 40, alignItems: 'center' }}>
         <Text style={{ color: '#94a3b8', fontSize: 14, textAlign: 'center', lineHeight: 20 }}>
-          Todavía no hay actividad para mostrar.{'\n'}Seguí a otros usuarios para ver sus posteos y eventos acá.
+          Todavía no hay actividad para mostrar.
         </Text>
       </View>
     );
@@ -143,24 +175,34 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
   return (
     <View style={{ width: '100%' }}>
       {items.map((item) => {
-        const person = item.feedType === 'post' ? item.author : item.feedType === 'event' ? item.organizer : item.user;
-        const actionLabel = item.feedType === 'post' ? 'posteó' : item.feedType === 'event' ? 'ha creado un evento' : `asistirá a ${item.event.title}`;
+        const person = item.feedType === 'post' ? item.author
+          : item.feedType === 'event' ? item.organizer
+          : item.feedType === 'news' ? item.author
+          : item.user;
+        const actionLabel = item.feedType === 'post' ? 'posteó'
+          : item.feedType === 'event' ? 'ha creado un evento'
+          : item.feedType === 'news' ? 'publicó una nota'
+          : `asistirá a ${item.event.title}`;
         const targetEvent = item.feedType === 'attendance' ? item.event : item;
 
         return (
           <View key={`${item.feedType}-${item.id || item.event?.id}-${item.sortDate}`} style={{ marginBottom: 20, width: '100%' }}>
-            <TouchableOpacity onPress={() => onSelectUser?.(person)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <TouchableOpacity
+              onPress={() => person && onSelectUser?.(person)}
+              disabled={!person}
+              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}
+            >
               {person?.avatar_url ? (
                 <Image source={{ uri: person.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10, backgroundColor: '#1e293b' }} />
               ) : (
                 <View style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="person" size={16} color="#64748b" />
+                  <Ionicons name={item.feedType === 'news' ? 'newspaper' : 'person'} size={16} color="#64748b" />
                 </View>
               )}
               <Text style={{ fontSize: 13, flex: 1 }}>
-                <Text style={{ color: '#ffffff', fontWeight: '800' }}>{authorName(person)}</Text>
+                <Text style={{ color: '#ffffff', fontWeight: '800' }}>{person ? authorName(person) : 'Hip-Happ'}</Text>
                 {!!person?.username && <Text style={{ color: '#94a3b8', fontWeight: '600' }}> @{person.username}</Text>}
-                <Text style={{ color: '#94a3b8' }}> {actionLabel}</Text>
+                <Text style={{ color: '#94a3b8' }}> {actionLabel} · {formatRelativeTime(item.sortDate)}</Text>
               </Text>
             </TouchableOpacity>
 
@@ -185,6 +227,25 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
                   {likeState[item.id]?.count > 0 && <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '700' }}>{likeState[item.id].count}</Text>}
                 </TouchableOpacity>
               </View>
+            )}
+
+            {item.feedType === 'news' && (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => toggleNewsExpanded(item.id)}
+                style={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderWidth: 1, borderRadius: 18, overflow: 'hidden' }}
+              >
+                {!!item.image_url && (
+                  <Image source={{ uri: item.image_url }} style={{ width: '100%', aspectRatio: 1 }} contentFit="cover" />
+                )}
+                <View style={{ padding: 14 }}>
+                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800', marginBottom: 6 }}>{item.title}</Text>
+                  <Text style={{ color: '#94a3b8', fontSize: 13, lineHeight: 18 }} numberOfLines={expandedNewsIds[item.id] ? undefined : 3}>{item.content}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
+                    <Ionicons name={expandedNewsIds[item.id] ? 'chevron-up' : 'chevron-down'} size={16} color="#64748b" />
+                  </View>
+                </View>
+              </TouchableOpacity>
             )}
 
             {(item.feedType === 'event' || item.feedType === 'attendance') && (
