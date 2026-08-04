@@ -342,32 +342,30 @@ export default function ProfileScreen({ userId, session, onBack, onEditProfile, 
                     {disciplines.join(' · ')}
                   </Text>
                 )}
+                {!!profile.location && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Ionicons name="location-outline" size={13} color="#64748b" style={{ marginRight: 4 }} />
+                    <Text style={{ color: '#64748b', fontSize: 12, fontWeight: '600' }}>{profile.location}</Text>
+                  </View>
+                )}
               </View>
             </View>
 
             {/* BIO */}
             {!!profile.bio && (
-              <Text style={{ color: '#cbd5e1', fontSize: 14, lineHeight: 20, marginTop: 16 }}>
+              <Text style={{ color: '#cbd5e1', fontSize: 14, lineHeight: 20, marginTop: 10 }}>
                 {profile.bio}
               </Text>
             )}
 
-            {/* UBICACIÓN */}
-            {!!profile.location && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16 }}>
-                <Ionicons name="location-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-                <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '600' }}>{profile.location}</Text>
-              </View>
-            )}
-
             {/* REDES SOCIALES Y WEB */}
             {socialLinks.length > 0 && (
-              <View style={{ marginTop: 16 }}>
+              <View style={{ marginTop: 10 }}>
                 {socialLinks.map((link) => (
                   <TouchableOpacity
                     key={link.key}
                     onPress={() => handleOpenLink(link.url)}
-                    style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}
                   >
                     {link.family === 'MaterialCommunityIcons' ? (
                       <MaterialCommunityIcons name={link.icon} size={16} color="#facc15" style={{ marginRight: 8 }} />
@@ -385,7 +383,7 @@ export default function ProfileScreen({ userId, session, onBack, onEditProfile, 
             {/* SEPARADOR + NUEVA PUBLICACIÓN */}
             {isOwnProfile && (
               <>
-                <View style={{ height: 1, backgroundColor: '#1e293b', marginTop: 20, marginBottom: 16 }} />
+                <View style={{ height: 1, backgroundColor: '#1e293b', marginTop: 14, marginBottom: 16 }} />
                 <TouchableOpacity onPress={handleNewPost}>
                   <Text style={{ color: '#64748b', fontSize: 15, fontStyle: 'italic' }}>Spit yo' mind</Text>
                 </TouchableOpacity>
