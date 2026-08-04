@@ -360,21 +360,27 @@ export default function ProfileScreen({ userId, session, onBack, onEditProfile, 
 
             {/* REDES SOCIALES Y WEB */}
             {socialLinks.length > 0 && (
-              <View style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
                 {socialLinks.map((link) => (
                   <TouchableOpacity
                     key={link.key}
                     onPress={() => handleOpenLink(link.url)}
-                    style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: '#0f172a',
+                      borderColor: '#1e293b',
+                      borderWidth: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                   >
                     {link.family === 'MaterialCommunityIcons' ? (
-                      <MaterialCommunityIcons name={link.icon} size={16} color="#facc15" style={{ marginRight: 8 }} />
+                      <MaterialCommunityIcons name={link.icon} size={17} color="#facc15" />
                     ) : (
-                      <Ionicons name={link.icon} size={16} color="#facc15" style={{ marginRight: 8 }} />
+                      <Ionicons name={link.icon} size={17} color="#facc15" />
                     )}
-                    <Text style={{ color: '#facc15', fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' }}>
-                      {link.label}
-                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
