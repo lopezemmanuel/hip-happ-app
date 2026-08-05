@@ -15,9 +15,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 import { uploadPickedImage } from '../lib/uploadImage';
+import { capLineBreaks } from '../lib/textLimits';
 
 const MAX_TITLE_LENGTH = 100;
 const MAX_CONTENT_LENGTH = 1000;
+const MAX_CONTENT_LINE_BREAKS = 25;
 
 export default function CreateNewsScreen({ session, onCancel, onDone, noteToEdit }) {
   const isEditing = !!noteToEdit;
@@ -180,7 +182,7 @@ export default function CreateNewsScreen({ session, onCancel, onDone, noteToEdit
         <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '700', marginBottom: 6 }}>Contenido</Text>
         <TextInput
           value={content}
-          onChangeText={(text) => setContent(text.slice(0, MAX_CONTENT_LENGTH))}
+          onChangeText={(text) => setContent(capLineBreaks(text.slice(0, MAX_CONTENT_LENGTH), MAX_CONTENT_LINE_BREAKS))}
           placeholder="Contá la noticia o nota..."
           placeholderTextColor="#64748b"
           multiline

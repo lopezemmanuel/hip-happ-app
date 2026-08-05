@@ -1,10 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Dimensions, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import { toggleLike, toggleAttendance } from '../lib/toggles';
+import { archivePost, deletePost, buildPostShareLink } from '../lib/postActions';
 import EventCard from '../components/EventCard';
+import Divider from '../components/Divider';
+import PostOptionsMenu from '../components/PostOptionsMenu';
+import ReportPostModal from '../components/ReportPostModal';
+
+// Ancho real de las tarjetas del feed: el contenido vive en un wrapper con
+// maxWidth:500 y paddingHorizontal:20 (ver MainScreen.js), así que las
+// fotos de los posteos necesitan este mismo ancho para quedar iguales a
+// las de "notas" (que sí ocupan el 100% de su tarjeta).
+const FEED_WIDTH = Math.min(Dimensions.get('window').width, 500) - 40;
 
 function authorName(user) {
   return user?.aka || user?.username || 'Usuario';
@@ -26,12 +37,13 @@ function formatRelativeTime(isoDate) {
   return `${day}/${month}/${year}`;
 }
 
-export default function HomeFeedScreen({ session, onSelectUser }) {
+export default function HomeFeedScreen({ session, onSelectUser, onEditPost }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [likeState, setLikeState] = useState({});
   const [attendanceState, setAttendanceState] = useState({});
   const [expandedNewsIds, setExpandedNewsIds] = useState({});
+  const [reportingPostId, setReportingPostId] = useState(null);
 
   const toggleNewsExpanded = (id) => {
     setExpandedNewsIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -59,6 +71,7 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
         .from('posts')
         .select('*, author:users!posts_author_id_fkey(id, username, aka, avatar_url)')
         .in('author_id', followedIds)
+        .eq('is_archived', false)
         .order('created_at', { ascending: false })
         .limit(30),
       supabase
@@ -158,6 +171,46 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
     if (error) setAttendanceState((prev) => ({ ...prev, [eventId]: current }));
   };
 
+  const handleShare = async (postId) => {
+    await Clipboard.setStringAsync(buildPostShareLink(postId));
+    Alert.alert('Listo', 'Copiamos el link de la publicación.');
+  };
+
+  const handleArchive = (postId) => {
+    Alert.alert('Archivar publicación', 'Vas a poder verla de nuevo desde Configuración → Publicaciones archivadas.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Archivar',
+        onPress: async () => {
+          const { error } = await archivePost(postId);
+          if (error) {
+            Alert.alert('Error', 'No se pudo archivar la publicación.');
+            return;
+          }
+          setItems((prev) => prev.filter((item) => !(item.feedType === 'post' && item.id === postId)));
+        },
+      },
+    ]);
+  };
+
+  const handleDelete = (postId) => {
+    Alert.alert('Eliminar publicación', 'Esta acción no se puede deshacer.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await deletePost(postId);
+          if (error) {
+            Alert.alert('Error', 'No se pudo eliminar la publicación.');
+            return;
+          }
+          setItems((prev) => prev.filter((item) => !(item.feedType === 'post' && item.id === postId)));
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return <ActivityIndicator size="large" color="#facc15" style={{ marginTop: 40 }} />;
   }
@@ -174,7 +227,7 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
 
   return (
     <View style={{ width: '100%' }}>
-      {items.map((item) => {
+      {items.map((item, index) => {
         const person = item.feedType === 'post' ? item.author
           : item.feedType === 'event' ? item.organizer
           : item.feedType === 'news' ? item.author
@@ -186,46 +239,69 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
         const targetEvent = item.feedType === 'attendance' ? item.event : item;
 
         return (
-          <View key={`${item.feedType}-${item.id || item.event?.id}-${item.sortDate}`} style={{ marginBottom: 20, width: '100%' }}>
-            <TouchableOpacity
-              onPress={() => person && onSelectUser?.(person)}
-              disabled={!person}
-              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}
-            >
-              {person?.avatar_url ? (
-                <Image source={{ uri: person.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10, backgroundColor: '#1e293b' }} />
-              ) : (
-                <View style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={item.feedType === 'news' ? 'newspaper' : 'person'} size={16} color="#64748b" />
-                </View>
-              )}
+          <React.Fragment key={`${item.feedType}-${item.id || item.event?.id}-${item.sortDate}`}>
+          <View style={{ width: '100%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <TouchableOpacity onPress={() => person && onSelectUser?.(person)} disabled={!person}>
+                {person?.avatar_url ? (
+                  <Image source={{ uri: person.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10, backgroundColor: '#1e293b' }} />
+                ) : (
+                  <View style={{ width: 36, height: 36, borderRadius: 18, marginRight: 10, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={item.feedType === 'news' ? 'newspaper' : 'person'} size={16} color="#64748b" />
+                  </View>
+                )}
+              </TouchableOpacity>
               <Text style={{ fontSize: 13, flex: 1 }}>
-                <Text style={{ color: '#ffffff', fontWeight: '800' }}>{person ? authorName(person) : 'Hip-Happ'}</Text>
-                {!!person?.username && <Text style={{ color: '#94a3b8', fontWeight: '600' }}> @{person.username}</Text>}
+                <Text
+                  style={{ color: '#ffffff', fontWeight: '800' }}
+                  onPress={() => person && onSelectUser?.(person)}
+                >
+                  {person ? authorName(person) : 'Hip-Happ'}
+                </Text>
+                {!!person?.username && (
+                  <Text
+                    style={{ color: '#94a3b8', fontWeight: '600' }}
+                    onPress={() => person && onSelectUser?.(person)}
+                  >
+                    {' '}@{person.username}
+                  </Text>
+                )}
                 <Text style={{ color: '#94a3b8' }}> {actionLabel} · {formatRelativeTime(item.sortDate)}</Text>
               </Text>
-            </TouchableOpacity>
+              {item.feedType === 'post' && (
+                <PostOptionsMenu
+                  isOwner={item.author_id === session?.user?.id}
+                  onEdit={() => onEditPost?.(item)}
+                  onShare={() => handleShare(item.id)}
+                  onArchive={() => handleArchive(item.id)}
+                  onDelete={() => handleDelete(item.id)}
+                  onReport={() => setReportingPostId(item.id)}
+                />
+              )}
+            </View>
 
             {item.feedType === 'post' && (
-              <View style={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderWidth: 1, borderRadius: 18, padding: 14 }}>
+              <View style={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderWidth: 1, borderRadius: 18, overflow: 'hidden' }}>
                 {item.image_urls?.length > 0 && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                  <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width: FEED_WIDTH }}>
                     {item.image_urls.map((url) => (
-                      <Image key={url} source={{ uri: url }} style={{ width: 160, height: 160, borderRadius: 12, marginRight: 8, backgroundColor: '#1e293b' }} />
+                      <Image key={url} source={{ uri: url }} style={{ width: FEED_WIDTH, aspectRatio: item.image_aspect === 'portrait' ? 4 / 5 : 1, backgroundColor: '#1e293b' }} contentFit="cover" />
                     ))}
                   </ScrollView>
                 )}
-                {!!item.text && <Text style={{ color: '#e2e8f0', fontSize: 14, lineHeight: 20, marginBottom: 8 }}>{item.text}</Text>}
-                {!!item.location_name && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <Ionicons name="location" size={13} color="#facc15" style={{ marginRight: 4 }} />
-                    <Text style={{ color: '#94a3b8', fontSize: 12 }} numberOfLines={1}>{item.location_name}</Text>
-                  </View>
-                )}
-                <TouchableOpacity onPress={() => handleToggleLike(item.id)} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}>
-                  <Ionicons name={likeState[item.id]?.isLiked ? 'heart' : 'heart-outline'} size={18} color={likeState[item.id]?.isLiked ? '#ef4444' : '#94a3b8'} style={{ marginRight: 6 }} />
-                  {likeState[item.id]?.count > 0 && <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '700' }}>{likeState[item.id].count}</Text>}
-                </TouchableOpacity>
+                <View style={{ padding: 14 }}>
+                  {!!item.text && <Text style={{ color: '#e2e8f0', fontSize: 14, lineHeight: 20, marginBottom: 8 }}>{item.text}</Text>}
+                  {!!item.location_name && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <Ionicons name="location" size={13} color="#facc15" style={{ marginRight: 4 }} />
+                      <Text style={{ color: '#94a3b8', fontSize: 12 }} numberOfLines={1}>{item.location_name}</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity onPress={() => handleToggleLike(item.id)} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}>
+                    <Ionicons name={likeState[item.id]?.isLiked ? 'heart' : 'heart-outline'} size={18} color={likeState[item.id]?.isLiked ? '#ef4444' : '#94a3b8'} style={{ marginRight: 6 }} />
+                    {likeState[item.id]?.count > 0 && <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '700' }}>{likeState[item.id].count}</Text>}
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
@@ -258,8 +334,17 @@ export default function HomeFeedScreen({ session, onSelectUser }) {
               />
             )}
           </View>
+          {index < items.length - 1 && <Divider />}
+          </React.Fragment>
         );
       })}
+
+      <ReportPostModal
+        visible={!!reportingPostId}
+        postId={reportingPostId}
+        session={session}
+        onClose={() => setReportingPostId(null)}
+      />
     </View>
   );
 }

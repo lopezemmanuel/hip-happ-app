@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import CreateNewsScreen from './CreateNewsScreen';
+import Divider from '../components/Divider';
 
 // Datos de ejemplo para los mensajes del Chat
 const MOCK_CHAT_MESSAGES = [
@@ -195,13 +196,13 @@ export default function CommunityScreen({ isGuest, onRequireAuth, session }) {
               Todavía no hay notas publicadas.
             </Text>
           ) : (
-            news.map((post) => {
+            news.map((post, index) => {
               const authorLabel = post.author?.aka || post.author?.username || 'Hip-Happ';
               const isExpanded = !!expandedNewsIds[post.id];
               const isOwner = !!session?.user?.id && post.author_id === session.user.id;
               return (
+                <React.Fragment key={post.id}>
                 <TouchableOpacity
-                  key={post.id}
                   activeOpacity={0.85}
                   onPress={() => toggleNewsExpanded(post.id)}
                   style={{
@@ -209,7 +210,6 @@ export default function CommunityScreen({ isGuest, onRequireAuth, session }) {
                     borderColor: '#1e293b',
                     borderWidth: 1,
                     borderRadius: 20,
-                    marginBottom: 16,
                     overflow: 'hidden',
                   }}
                 >
@@ -253,6 +253,8 @@ export default function CommunityScreen({ isGuest, onRequireAuth, session }) {
                     </View>
                   </View>
                 </TouchableOpacity>
+                {index < news.length - 1 && <Divider />}
+                </React.Fragment>
               );
             })
           )}

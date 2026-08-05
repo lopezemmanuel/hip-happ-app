@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, Alert, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 import BottomTab from '../components/BottomTab';
 import UserDrawer from '../components/UserDrawer';
 import EventsScreen from './EventsScreen';
@@ -13,12 +15,12 @@ import ProfileScreen from './ProfileScreen';
 import ArtistVerificationScreen from './ArtistVerificationScreen';
 import NewPostScreen from './NewPostScreen';
 import HomeFeedScreen from './HomeFeedScreen';
+import SettingsScreen from './SettingsScreen';
 import { supabase } from '../lib/supabase';
 import { getCachedProfileSync, getCachedProfile, setCachedProfile } from '../lib/profileCache';
 
 export default function MainScreen({ session, isGuest, userProfile, onRequireAuth }) {
   const [activeTab, setActiveTab] = useState('Home');
-  const [drawerVisible, setDrawerVisible] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showValidateProfile, setShowValidateProfile] = useState(false);
   const [pendingOpenCreateEvent, setPendingOpenCreateEvent] = useState(false);
@@ -29,6 +31,65 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
   const [profile, setProfile] = useState(() => getCachedProfileSync(session?.user?.id));
   const [viewedProfileId, setViewedProfileId] = useState(null);
   const [showNewPost, setShowNewPost] = useState(false);
+  const [editingPost, setEditingPost] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const handleEditPost = (post) => {
+    setEditingPost(post);
+    setShowNewPost(true);
+  };
+
+  // Estilo "push" (como X): la solapa de perfil es un panel fijo de fondo,
+  // del lado izquierdo (más cómodo para diestros). Lo que se anima es el
+  // CONTENIDO PRINCIPAL, deslizándose hacia la derecha para revelarla.
+  const DRAWER_WIDTH = Dimensions.get('window').width;
+  const REVEAL_WIDTH = DRAWER_WIDTH * 0.8;
+  const translateX = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [drawerDragging, setDrawerDragging] = useState(false);
+
+  const openDrawer = () => {
+    translateX.value = withTiming(REVEAL_WIDTH, { duration: 220 });
+    setDrawerVisible(true);
+  };
+  const closeDrawer = () => {
+    translateX.value = withTiming(0, { duration: 180 });
+    setDrawerVisible(false);
+  };
+
+  // Gesture handler negocia correctamente con los TouchableOpacity anidados
+  // (posts, botones), a diferencia de PanResponder — activeOffsetX/failOffsetY
+  // le dicen al reconocedor nativo que solo tome el gesto si el movimiento es
+  // predominantemente horizontal, y si no, lo cede al scroll/los toques.
+  const panGesture = Gesture.Pan()
+    .enabled(!viewedProfileId)
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-20, 20])
+    .onStart(() => {
+      startX.value = translateX.value;
+      runOnJS(setDrawerDragging)(true);
+    })
+    .onUpdate((e) => {
+      const next = startX.value + e.translationX;
+      translateX.value = Math.min(REVEAL_WIDTH, Math.max(0, next));
+    })
+    .onEnd((e) => {
+      const passedThreshold = translateX.value > REVEAL_WIDTH * 0.4;
+      const shouldOpen = e.velocityX > 500 ? true : e.velocityX < -500 ? false : passedThreshold;
+      translateX.value = withTiming(shouldOpen ? REVEAL_WIDTH : 0, { duration: 200 });
+      runOnJS(setDrawerVisible)(shouldOpen);
+    })
+    .onFinalize(() => {
+      runOnJS(setDrawerDragging)(false);
+    });
+
+  const contentAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: (translateX.value / REVEAL_WIDTH) * 0.75,
+  }));
 
   // Traemos el perfil completo apenas se monta la pantalla (no cuando se abre
   // la solapa), para que esté listo de antemano y no haya que esperar.
@@ -125,6 +186,7 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
               <HomeFeedScreen
                 session={session}
                 onSelectUser={(user) => setViewedProfileId(user.id)}
+                onEditPost={handleEditPost}
               />
             )}
           </View>
@@ -188,8 +250,15 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
     return (
       <NewPostScreen
         session={session}
-        onCancel={() => setShowNewPost(false)}
-        onPosted={() => setShowNewPost(false)}
+        postToEdit={editingPost}
+        onCancel={() => {
+          setShowNewPost(false);
+          setEditingPost(null);
+        }}
+        onPosted={() => {
+          setShowNewPost(false);
+          setEditingPost(null);
+        }}
       />
     );
   }
@@ -217,110 +286,144 @@ export default function MainScreen({ session, isGuest, userProfile, onRequireAut
     );
   }
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#020617' }}>
-
-      {/* HEADER SUPERIOR CON LOGO Y AVATAR */}
-      <View style={{ width: '100%', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-
-        {/* LOGO HIP-HAPP (genérico por el momento) */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: '#facc15',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginRight: 8,
-            }}
-          >
-            <Ionicons name="mic" size={18} color="#000000" />
-          </View>
-          <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800' }}>Hip-Happ</Text>
-        </View>
-
-        {/* AVATAR DE USUARIO */}
-        <TouchableOpacity
-          onPress={() => setDrawerVisible(true)}
-          activeOpacity={0.8}
-          style={{ position: 'relative' }}
-        >
-          {isGuest ? (
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80' }}
-              style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15' }}
-            />
-          ) : currentProfile ? (
-            <Image
-              source={{ uri: currentProfile.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80' }}
-              style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15' }}
-            />
-          ) : (
-            // Todavía no sabemos si esta cuenta tiene avatar o no: mejor un
-            // círculo vacío que mostrar la foto de stock y después "pegar el salto".
-            <View
-              style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15', backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Ionicons name="person" size={18} color="#64748b" />
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView 
-        contentContainerStyle={{ 
-          paddingHorizontal: 20, 
-          paddingTop: 10, 
-          paddingBottom: 110, 
-          alignItems: 'center' 
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={{ width: '100%', maxWidth: 500, alignItems: 'center' }}>
-          {renderContent()}
-        </View>
-      </ScrollView>
-
-      {/* BARRA DE NAVEGACIÓN FLOTANTE */}
-      <BottomTab activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      {/* SOLAPA DESLIZABLE DE USUARIO */}
-      <UserDrawer
-        visible={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+  if (showSettings) {
+    return (
+      <SettingsScreen
         session={session}
-        isGuest={isGuest}
-        profile={currentProfile}
-        onLogout={() => {
-          setDrawerVisible(false);
-          onRequireAuth();
-        }}
-        onEditProfile={() => {
-          setDrawerVisible(false);
-          setShowEditProfile(true);
-        }}
-        onViewProfile={() => {
-          setDrawerVisible(false);
-          setViewedProfileId(session?.user?.id ?? null);
-        }}
+        onClose={() => setShowSettings(false)}
       />
+    );
+  }
 
-      {/* VISTA DE PERFIL (PROPIO O PÚBLICO) */}
-      {viewedProfileId && (
-        <ProfileScreen
-          userId={viewedProfileId}
+  return (
+    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+
+      {/* CAPA DE FONDO FIJA: LA SOLAPA (izquierda, no se anima ella, la revela el contenido de encima) */}
+      <View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: REVEAL_WIDTH }}>
+        <UserDrawer
           session={session}
-          onBack={() => setViewedProfileId(null)}
+          isGuest={isGuest}
+          profile={currentProfile}
+          onClose={closeDrawer}
+          onLogout={() => {
+            closeDrawer();
+            onRequireAuth();
+          }}
           onEditProfile={() => {
-            setViewedProfileId(null);
+            closeDrawer();
             setShowEditProfile(true);
           }}
-          onNewPost={() => setShowNewPost(true)}
+          onViewProfile={() => {
+            closeDrawer();
+            setViewedProfileId(session?.user?.id ?? null);
+          }}
+          onOpenSettings={() => {
+            closeDrawer();
+            setShowSettings(true);
+          }}
         />
-      )}
+      </View>
 
-    </SafeAreaView>
+      {/* CAPA DE ENCIMA: TODA LA APP, SE DESLIZA A LA DERECHA PARA REVELAR LA SOLAPA */}
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[{ flex: 1 }, contentAnimatedStyle]}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#020617' }}>
+
+            <ScrollView
+              contentContainerStyle={{
+                paddingHorizontal: 20,
+                paddingTop: 10,
+                paddingBottom: 110,
+                alignItems: 'center'
+              }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={{ width: '100%', maxWidth: 500, alignItems: 'center' }}>
+
+                {/* HEADER CON AVATAR (izq) Y LOGO (der), se va con el scroll */}
+                <View style={{ width: '100%', paddingVertical: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+
+                  {/* AVATAR DE USUARIO */}
+                  <TouchableOpacity
+                    onPress={openDrawer}
+                    activeOpacity={0.8}
+                    style={{ position: 'relative' }}
+                  >
+                    {isGuest ? (
+                      <Image
+                        source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80' }}
+                        style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15' }}
+                      />
+                    ) : currentProfile ? (
+                      <Image
+                        source={{ uri: currentProfile.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80' }}
+                        style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15' }}
+                      />
+                    ) : (
+                      // Todavía no sabemos si esta cuenta tiene avatar o no: mejor un
+                      // círculo vacío que mostrar la foto de stock y después "pegar el salto".
+                      <View
+                        style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#facc15', backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Ionicons name="person" size={18} color="#64748b" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* LOGO HIP-HAPP (genérico por el momento) */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800', marginRight: 8 }}>Hip-Happ</Text>
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        backgroundColor: '#facc15',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Ionicons name="mic" size={18} color="#000000" />
+                    </View>
+                  </View>
+                </View>
+
+                {renderContent()}
+              </View>
+            </ScrollView>
+
+            {/* BARRA DE NAVEGACIÓN FLOTANTE */}
+            <BottomTab activeTab={activeTab} setActiveTab={setActiveTab} />
+
+            {/* VISTA DE PERFIL (PROPIO O PÚBLICO) */}
+            {viewedProfileId && (
+              <ProfileScreen
+                userId={viewedProfileId}
+                session={session}
+                onBack={() => setViewedProfileId(null)}
+                onEditProfile={() => {
+                  setViewedProfileId(null);
+                  setShowEditProfile(true);
+                }}
+                onNewPost={() => setShowNewPost(true)}
+                onEditPost={handleEditPost}
+              />
+            )}
+          </SafeAreaView>
+
+          {/* FONDO OSCURECIDO, TAPA EL CONTENIDO PRINCIPAL MIENTRAS LA SOLAPA ESTÁ VISIBLE O SE ESTÁ ARRASTRANDO */}
+          {(drawerVisible || drawerDragging) && (
+            <Animated.View
+              style={[
+                { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000000' },
+                backdropAnimatedStyle,
+              ]}
+            >
+              <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeDrawer} />
+            </Animated.View>
+          )}
+        </Animated.View>
+      </GestureDetector>
+    </View>
   );
 }
