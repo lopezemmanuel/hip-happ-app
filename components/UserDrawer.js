@@ -1,59 +1,18 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { Image } from 'expo-image';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  Switch,
   Alert,
-  Dimensions,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const { width } = Dimensions.get('window');
-
-export default function UserDrawer({ visible, onClose, session, isGuest, onLogout, onEditProfile, onViewProfile, profile }) {
-  const [notifications, setNotifications] = React.useState(true);
-  const [selectedCity, setSelectedCity] = React.useState('Buenos Aires, AR');
-
-  // Posición inicial del panel fuera de la pantalla (a la derecha)
-  const translateX = useRef(new Animated.Value(width)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(translateX, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(backdropOpacity, {
-          toValue: 0.75,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(translateX, {
-          toValue: width,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(backdropOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible]);
-
-  if (!visible) return null;
-
+// Estilo "push" (como X): este panel es fijo, vive de fondo. Lo que se anima
+// para mostrarlo/ocultarlo es el contenido principal, deslizándose por
+// encima — esa animación vive en MainScreen.js, no acá.
+export default function UserDrawer({ session, isGuest, onLogout, onEditProfile, onViewProfile, profile, onClose, onOpenSettings }) {
   // El perfil ya viene cargado desde MainScreen (fetch al montar la pantalla,
   // no al abrir la solapa), así que se muestra al instante sin esperas.
   // Orden de prioridad: Administrador > Cuenta verificada > Perfil validado > (nada, Usuario Común)
@@ -76,74 +35,24 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
   return (
     <View
       style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 1000,
-        flexDirection: 'row',
+        flex: 1,
+        backgroundColor: '#0f172a',
+        paddingTop: 50,
+        paddingHorizontal: 20,
+        paddingBottom: 24,
       }}
     >
-      {/* CAPA DE FONDO TRANSLÚCIDA CON OPACIDAD ANIMADA */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: '#020617',
-          opacity: backdropOpacity,
-        }}
-      >
-        <TouchableOpacity
-          style={{ flex: 1 }}
-          activeOpacity={1}
-          onPress={onClose}
-        />
-      </Animated.View>
-
-      {/* ÁREA TRANSPARENTE TÁCTIL (20% IZQUIERDA) */}
-      <TouchableOpacity
-        style={{ width: '20%', height: '100%' }}
-        activeOpacity={1}
-        onPress={onClose}
-      />
-
-      {/* PANEL SLIDER DESDE LA DERECHA (80% ANCHO) */}
-      <Animated.View
-        style={{
-          width: '80%',
-          height: '100%',
-          backgroundColor: '#0f172a',
-          borderColor: '#1e293b',
-          borderLeftWidth: 1,
-          paddingTop: 50,
-          paddingHorizontal: 20,
-          paddingBottom: 24,
-          transform: [{ translateX }],
-          shadowColor: '#000000',
-          shadowOffset: { width: -4, height: 0 },
-          shadowOpacity: 0.5,
-          shadowRadius: 10,
-          elevation: 10,
-        }}
-      >
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* BOTÓN CERRAR SOLAPA */}
-          <TouchableOpacity
-            onPress={onClose}
-            style={{
-              alignSelf: 'flex-end',
-              padding: 8,
-              backgroundColor: '#1e293b',
-              borderRadius: 12,
-              marginBottom: 16,
-            }}
-          >
-            <Ionicons name="close" size={20} color="#ffffff" />
-          </TouchableOpacity>
+      <ScrollView showsVerticalScrollIndicator={false}>
+          {/* BOTÓN DE CONFIGURACIÓN (engranaje) */}
+          {!isGuest && (
+            <TouchableOpacity
+              onPress={() => onOpenSettings?.()}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ alignSelf: 'flex-end', padding: 8, backgroundColor: '#1e293b', borderRadius: 12, marginBottom: 16 }}
+            >
+              <Ionicons name="settings-outline" size={20} color="#ffffff" />
+            </TouchableOpacity>
+          )}
 
           {/* 1. MI PERFIL */}
           <View style={{ alignItems: 'center', marginBottom: 24, borderBottomWidth: 1, borderBottomColor: '#1e293b', paddingBottom: 20 }}>
@@ -274,37 +183,6 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
             </View>
           </View>
 
-          {/* 2. AJUSTES */}
-          <Text style={{ color: '#64748b', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', marginBottom: 12 }}>
-            Ajustes
-          </Text>
-
-          <View style={{ backgroundColor: '#020617', borderRadius: 16, padding: 12, marginBottom: 24, borderWidth: 1, borderColor: '#1e293b' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="notifications-outline" size={18} color="#facc15" style={{ marginRight: 10 }} />
-                <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '600' }}>Notificaciones</Text>
-              </View>
-              <Switch
-                value={notifications}
-                onValueChange={setNotifications}
-                trackColor={{ false: '#334155', true: '#facc15' }}
-                thumbColor={notifications ? '#000000' : '#cbd5e1'}
-              />
-            </View>
-
-            <TouchableOpacity
-              onPress={() => Alert.alert('Ubicación', 'Selecciona tu ciudad principal.')}
-              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#1e293b' }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="location-outline" size={18} color="#facc15" style={{ marginRight: 10 }} />
-                <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '600' }}>Ubicación</Text>
-              </View>
-              <Text style={{ color: '#94a3b8', fontSize: 12 }}>{selectedCity}</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* 3. SOPORTE Y COMUNIDAD */}
           <Text style={{ color: '#64748b', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', marginBottom: 12 }}>
             Soporte & Comunidad
@@ -348,7 +226,6 @@ export default function UserDrawer({ visible, onClose, session, isGuest, onLogou
             {isGuest ? 'Salir de Invitado' : 'Cerrar Sesión'}
           </Text>
         </TouchableOpacity>
-      </Animated.View>
     </View>
   );
 }

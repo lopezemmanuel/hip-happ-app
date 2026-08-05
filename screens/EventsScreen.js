@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CreateEventScreen from './CreateEventScreen';
 import EventsMap from '../components/EventsMap';
 import EventCard from '../components/EventCard';
+import Divider from '../components/Divider';
 import { supabase } from '../lib/supabase';
 import { toggleAttendance } from '../lib/toggles';
 
@@ -429,26 +430,28 @@ export default function EventsScreen({ onSelectEvent, session, isGuest, userRole
         {loading ? (
           <ActivityIndicator size="large" color="#facc15" style={{ marginTop: 20 }} />
         ) : (
-          filteredEvents.map((event) => {
+          filteredEvents.map((event, index) => {
             const attendance = attendanceMap[event.id] || { count: 0, isAttending: false };
 
             return (
-              <EventCard
-                key={event.id}
-                event={event}
-                tags={getSelectedTags(event)}
-                selected={selectedEventId === event.id}
-                onPress={() => {
-                  setSelectedEventId(event.id);
-                  setFocusEventId(event.id);
-                }}
-                isAttending={attendance.isAttending}
-                attendanceCount={attendance.count}
-                onToggleAttendance={() => handleToggleAttendance(event)}
-                isOwner={canEditEvent(event)}
-                onEdit={() => handleEditRequest(event)}
-                onDelete={() => handleDeleteEvent(event)}
-              />
+              <React.Fragment key={event.id}>
+                <EventCard
+                  event={event}
+                  tags={getSelectedTags(event)}
+                  selected={selectedEventId === event.id}
+                  onPress={() => {
+                    setSelectedEventId(event.id);
+                    setFocusEventId(event.id);
+                  }}
+                  isAttending={attendance.isAttending}
+                  attendanceCount={attendance.count}
+                  onToggleAttendance={() => handleToggleAttendance(event)}
+                  isOwner={canEditEvent(event)}
+                  onEdit={() => handleEditRequest(event)}
+                  onDelete={() => handleDeleteEvent(event)}
+                />
+                {index < filteredEvents.length - 1 && <Divider />}
+              </React.Fragment>
             );
           })
         )}

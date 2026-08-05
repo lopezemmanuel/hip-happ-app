@@ -61,7 +61,6 @@ export default function EventCard({
         borderColor: selected ? '#facc15' : '#1e293b',
         borderWidth: selected ? 2 : 1,
         borderRadius: 20,
-        marginBottom: 16,
         overflow: 'hidden',
       }}
     >

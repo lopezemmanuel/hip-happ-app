@@ -15,6 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 import { uploadPickedImage } from '../lib/uploadImage';
+import { capLineBreaks } from '../lib/textLimits';
+
+const MAX_BIO_LINE_BREAKS = 5;
 
 const DISCIPLINES_LIST = [
   'Agente', 'B-Boy', 'B-Girl', 'Beatboxer', 'Beatmaker', 'Breaker',
@@ -445,7 +448,7 @@ export default function EditProfileScreen({ session, onDone }) {
         <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '700', marginBottom: 6 }}>Bio</Text>
         <TextInput
           value={bio}
-          onChangeText={(text) => setBio(text.slice(0, 150))}
+          onChangeText={(text) => setBio(capLineBreaks(text.slice(0, 150), MAX_BIO_LINE_BREAKS))}
           placeholder="Contá algo sobre vos..."
           placeholderTextColor="#64748b"
           multiline
